@@ -1,22 +1,12 @@
-// ============================================================
-// src/hooks/useProfile.ts
-// Gerencia o perfil do usuário, incluindo meta_aprovacao.
-// ============================================================
-
 import { useState, useEffect, useCallback } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
-import type { Profile, ProfileRow } from "../types";
 
-function rowToProfile(row: ProfileRow): Profile {
-  return {
-    id: row.id,
-    email: row.email,
-    nome: row.nome,
-    metaAprovacao: row.meta_aprovacao,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
+interface Profile {
+  id: string;
+  email: string;
+  nome: string | null;
+  metaAprovacao: number;
 }
 
 interface UseProfileReturn {
@@ -35,7 +25,6 @@ export function useProfile(user: User | null): UseProfileReturn {
       setLoading(false);
       return;
     }
-
     supabase
       .from("profiles")
       .select("*")
@@ -43,25 +32,26 @@ export function useProfile(user: User | null): UseProfileReturn {
       .single()
       .then(({ data, error }) => {
         if (!error && data) {
-          setProfile(rowToProfile(data as ProfileRow));
+          const row = data as any;
+          setProfile({
+            id: row.id,
+            email: row.email,
+            nome: row.nome,
+            metaAprovacao: row.meta_aprovacao,
+          });
         }
         setLoading(false);
       });
   }, [user?.id]);
 
-  const updateMeta = useCallback(
-    async (meta: number): Promise<void> => {
-      if (!user) return;
-      const { error } = await supabase
-        .from("profiles")
-        .update({ meta_aprovacao: meta })
-        .eq("id", user.id);
-      if (!error) {
-        setProfile((prev) => (prev ? { ...prev, metaAprovacao: meta } : prev));
-      }
-    },
-    [user]
-  );
+  const updateMeta = useCallback(async (meta: number) => {
+    if (!user) return;
+    await supabase
+      .from("profiles")
+      .update({ meta_aprovacao: meta } as any)
+      .eq("id", user.id);
+    setProfile((prev) => (prev ? { ...prev, metaAprovacao: meta } : prev));
+  }, [user]);
 
   return { profile, loading, updateMeta };
 }
