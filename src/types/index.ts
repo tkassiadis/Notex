@@ -1,38 +1,26 @@
 // ============================================================
 // src/types/index.ts
-// Tipagem central do projeto.
-// Espelha exatamente os campos que já existem no frontend,
-// com adição de user_id e timestamps do banco.
 // ============================================================
 
-// ------------------------------------------------------------
-// Atividade — objeto principal do sistema
-// Os nomes de campo aqui são camelCase (frontend).
-// A conversão snake_case ↔ camelCase é feita no hook useAtividades.
-// ------------------------------------------------------------
 export interface Atividade {
-  id: string;                    // UUID (substituiu Date.now())
-  avaliacao: string;             // "AP1" | "AP2" | "AS" | "AF" | "Trabalho"
-  instrumento: string;           // Nome do instrumento de avaliação
-  disciplina: string;            // Nome da disciplina
-  subdivisao: string;            // Subdivisão (ex: "Pneumo e Cardio")
-  status: StatusOption;          // Status de estudo
-  data: string;                  // ISO date string "YYYY-MM-DD"
-  pesoAvaliacao: number;         // 0 a 1
-  pesoInstrumento: number;       // 0 a 1
+  id: string;
+  avaliacao: string;
+  instrumento: string;
+  disciplina: string;
+  subdivisao: string;
+  status: StatusOption;
+  data: string;
+  pesoAvaliacao: number;
+  pesoInstrumento: number;
   pontuacaoMaxima: number | null;
   pontuacao: number | null;
   observacoes: string;
 }
 
-// Atividade enriquecida — adiciona campo calculado, não persistido
 export interface AtividadeEnriquecida extends Atividade {
   daysRemaining: number | null;
 }
 
-// ------------------------------------------------------------
-// Opções fixas — preservadas exatamente do original
-// ------------------------------------------------------------
 export type StatusOption =
   | "Não iniciado"
   | "Estudo inicial"
@@ -42,10 +30,6 @@ export type StatusOption =
 
 export type AvaliacaoOption = "AP1" | "AP2" | "AS" | "AF" | "Trabalho";
 
-// ------------------------------------------------------------
-// DisciplinaStats — resultado de getDisciplineStats()
-// Preservado exatamente do original
-// ------------------------------------------------------------
 export interface DisciplinaStats {
   disciplina: string;
   items: AtividadeEnriquecida[];
@@ -53,6 +37,9 @@ export interface DisciplinaStats {
   pesoConcluido: number;
   pesoRestante: number;
   notaNecessaria: number | null;
+  notaMaxima: number | null;           // NOVO: nota máxima alcançável
+  aprovacaoGarantida: boolean;         // NOVO: meta já garantida matematicamente
+  aprovacaoImpossivel: boolean;        // NOVO: impossível atingir a meta
   statusCounts: {
     "Não iniciado": number;
     "Em andamento": number;
@@ -64,21 +51,15 @@ export interface DisciplinaStats {
   emRisco: boolean;
 }
 
-// ------------------------------------------------------------
-// Profile — dados do usuário no Supabase
-// ------------------------------------------------------------
 export interface Profile {
   id: string;
   email: string;
   nome: string | null;
-  metaAprovacao: number;         // default 7.0, configurável
+  metaAprovacao: number;
   createdAt: string;
   updatedAt: string;
 }
 
-// ------------------------------------------------------------
-// Formato da row no banco (snake_case) — usado internamente no hook
-// ------------------------------------------------------------
 export interface AtividadeRow {
   id: string;
   user_id: string;
