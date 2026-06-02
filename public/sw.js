@@ -2,45 +2,44 @@
 // public/sw.js — Service Worker
 // Controle do Semestre
 //
-// Estratégias:
-//   App shell (JS/CSS/HTML)  → Cache First  (instala no primeiro load)
-//   Fontes Google            → Cache First  (stale-while-revalidate)
-//   Supabase API             → Network First (dados sempre frescos)
-//   Tudo mais                → Network First com fallback
+// Estratégias (corrigidas para auto-atualização):
+//   HTML / navegação        → Network First  (sempre busca a versão nova)
+//   JS/CSS com hash do Vite  → Cache First    (nome muda quando conteúdo muda)
+//   Ícones / manifest / SVG  → Cache First
+//   Fontes Google            → Cache First
+//   Supabase API             → Network First, sem cache (dados frescos)
+//
+// IMPORTANTE: ao publicar uma nova versão, troque o número em CACHE_VERSION.
+// Isso apaga os caches antigos e força o app a carregar o código novo.
 // ============================================================
 
-const CACHE_NAME    = "controle-semestre-v1";
-const SHELL_CACHE   = "controle-semestre-shell-v1";
-const FONT_CACHE    = "controle-semestre-fonts-v1";
+const CACHE_VERSION = "v2";  // ← incremente a cada release (v2, v3, ...)
 
-// Recursos do app shell — cacheados na instalação
+const SHELL_CACHE = `controle-semestre-shell-${CACHE_VERSION}`;
+const FONT_CACHE  = `controle-semestre-fonts-${CACHE_VERSION}`;
+const DATA_CACHE  = `controle-semestre-data-${CACHE_VERSION}`;
+
+// Apenas recursos estáveis no pré-cache (NÃO inclui o HTML, que é sempre buscado da rede)
 const SHELL_ASSETS = [
-  "/",
-  "/index.html",
   "/manifest.json",
   "/favicon.svg",
 ];
 
 // ─── INSTALL ─────────────────────────────────────────────────
-// Pré-cacheia o app shell para garantir funcionamento offline
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(SHELL_CACHE).then((cache) => {
-      return cache.addAll(SHELL_ASSETS).catch((err) => {
-        // Falha silenciosa: não bloqueia instalação se um asset falhar
+    caches.open(SHELL_CACHE).then((cache) =>
+      cache.addAll(SHELL_ASSETS).catch((err) => {
         console.warn("[SW] Shell cache parcial:", err);
-      });
-    }).then(() => {
-      // Ativa imediatamente sem esperar fechar a aba anterior
-      return self.skipWaiting();
-    })
+      })
+    ).then(() => self.skipWaiting())   // ativa a versão nova imediatamente
   );
 });
 
 // ─── ACTIVATE ────────────────────────────────────────────────
-// Remove caches de versões anteriores
+// Remove TODOS os caches que não sejam da versão atual
 self.addEventListener("activate", (event) => {
-  const validCaches = [CACHE_NAME, SHELL_CACHE, FONT_CACHE];
+  const validCaches = [SHELL_CACHE, FONT_CACHE, DATA_CACHE];
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
@@ -51,7 +50,7 @@ self.addEventListener("activate", (event) => {
             return caches.delete(key);
           })
       )
-    ).then(() => self.clients.claim())
+    ).then(() => self.clients.claim())   // assume controle das abas abertas
   );
 });
 
@@ -60,38 +59,38 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Ignora requests não-GET (POST, PUT, DELETE para Supabase)
   if (request.method !== "GET") return;
-
-  // Ignora extensões do browser e requests de outros origins sem relevância
   if (url.protocol !== "http:" && url.protocol !== "https:") return;
 
   // ── 1. Supabase API → Network First, sem cache ──────────────
-  // Dados do banco devem sempre vir frescos
   if (url.hostname.includes("supabase.co")) {
-    event.respondWith(networkFirst(request, CACHE_NAME, false));
+    event.respondWith(networkFirst(request, DATA_CACHE, false));
     return;
   }
 
-  // ── 2. Google Fonts → Cache First (raro mudar) ──────────────
-  if (
-    url.hostname === "fonts.googleapis.com" ||
-    url.hostname === "fonts.gstatic.com"
-  ) {
+  // ── 2. Google Fonts → Cache First ───────────────────────────
+  if (url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com") {
     event.respondWith(cacheFirst(request, FONT_CACHE));
     return;
   }
 
-  // ── 3. App shell (HTML, JS, CSS, SVG) → Cache First ─────────
+  // ── 3. Navegação / HTML → Network First ─────────────────────
+  // Garante que o HTML novo (com referência aos JS novos) seja sempre buscado.
+  if (request.mode === "navigate" || url.pathname === "/" || url.pathname.endsWith(".html")) {
+    event.respondWith(networkFirst(request, SHELL_CACHE, true));
+    return;
+  }
+
+  // ── 4. Assets com hash (JS/CSS/SVG/ícones) → Cache First ────
+  // O Vite muda o nome do arquivo quando o conteúdo muda, então cache é seguro.
   if (
     url.origin === self.location.origin &&
     (
-      url.pathname === "/" ||
-      url.pathname.endsWith(".html") ||
       url.pathname.endsWith(".js") ||
       url.pathname.endsWith(".css") ||
       url.pathname.endsWith(".svg") ||
       url.pathname.startsWith("/icons/") ||
+      url.pathname.startsWith("/assets/") ||
       url.pathname === "/manifest.json"
     )
   ) {
@@ -99,19 +98,21 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // ── 4. Tudo mais → Network First com fallback ───────────────
-  event.respondWith(networkFirst(request, CACHE_NAME, true));
+  // ── 5. Tudo mais → Network First com fallback ───────────────
+  event.respondWith(networkFirst(request, DATA_CACHE, true));
+});
+
+// ─── MENSAGENS ───────────────────────────────────────────────
+// Permite que a página peça ativação imediata da nova versão
+self.addEventListener("message", (event) => {
+  if (event.data === "SKIP_WAITING") self.skipWaiting();
 });
 
 // ─── ESTRATÉGIAS ─────────────────────────────────────────────
 
-/**
- * Cache First: serve do cache; se não tiver, busca na rede e armazena.
- */
 async function cacheFirst(request, cacheName) {
   const cached = await caches.match(request);
   if (cached) return cached;
-
   try {
     const response = await fetch(request);
     if (response.ok) {
@@ -120,7 +121,6 @@ async function cacheFirst(request, cacheName) {
     }
     return response;
   } catch {
-    // Offline e sem cache: retorna 503 genérico
     return new Response("Offline — recurso não disponível", {
       status: 503,
       headers: { "Content-Type": "text/plain" },
@@ -128,10 +128,6 @@ async function cacheFirst(request, cacheName) {
   }
 }
 
-/**
- * Network First: tenta a rede; se falhar, serve do cache.
- * Se useCache = false, não armazena no cache (para APIs).
- */
 async function networkFirst(request, cacheName, useCache) {
   try {
     const response = await fetch(request);
@@ -145,22 +141,11 @@ async function networkFirst(request, cacheName, useCache) {
       const cached = await caches.match(request);
       if (cached) return cached;
     }
-    // Fallback offline: retorna index.html para navegação SPA
     const fallback = await caches.match("/index.html");
     if (fallback) return fallback;
-
     return new Response("Você está offline.", {
       status: 503,
       headers: { "Content-Type": "text/plain" },
     });
   }
 }
-
-// ─── BACKGROUND SYNC (futuro) ────────────────────────────────
-// Placeholder para sincronização quando reconectar
-self.addEventListener("sync", (event) => {
-  if (event.tag === "sync-atividades") {
-    console.log("[SW] Background sync disparado:", event.tag);
-    // Implementar na Fase 4 junto com Supabase realtime
-  }
-});

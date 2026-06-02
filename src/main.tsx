@@ -11,7 +11,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 );
 
 // ── Registro do Service Worker ────────────────────────────────
-// Registra apenas em produção (HTTPS) ou localhost
+// Auto-atualização: quando uma versão nova é detectada, ela é ativada
+// e a página recarrega automaticamente (uma única vez).
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker
@@ -19,17 +20,18 @@ if ("serviceWorker" in navigator) {
       .then((registration) => {
         console.log("[PWA] Service Worker registrado:", registration.scope);
 
-        // Verifica atualizações a cada vez que o app abre
+        // Procura ativamente por uma versão nova assim que o app abre
+        registration.update();
+
         registration.addEventListener("updatefound", () => {
           const newWorker = registration.installing;
           if (!newWorker) return;
           newWorker.addEventListener("statechange", () => {
-            if (
-              newWorker.state === "installed" &&
-              navigator.serviceWorker.controller
-            ) {
-              // Nova versão disponível — notifica o usuário discretamente
-              console.log("[PWA] Nova versão disponível. Recarregue para atualizar.");
+            if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+              // Há uma versão nova esperando — manda ativar imediatamente
+              console.log("[PWA] Nova versão encontrada, atualizando...");
+              newWorker.postMessage("SKIP_WAITING");
+              registration.waiting?.postMessage("SKIP_WAITING");
             }
           });
         });
@@ -37,5 +39,14 @@ if ("serviceWorker" in navigator) {
       .catch((err) => {
         console.warn("[PWA] Service Worker falhou:", err);
       });
+
+    // Quando o novo Service Worker assume o controle, recarrega a página
+    // uma única vez para carregar o código novo.
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    });
   });
 }
