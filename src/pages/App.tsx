@@ -90,12 +90,12 @@ function Modal({ open, onClose, title, children }: { open: boolean; onClose: () 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl border border-white/10 overflow-hidden" style={{ background: "#111827", maxHeight: "92vh", overflowY: "auto" }}>
+      <div className="relative w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl border border-white/10 overflow-hidden" style={{ background: "#111827", maxHeight: "92dvh", overflowY: "auto" }}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 sticky top-0 z-10" style={{ background: "#111827" }}>
           <h3 className="text-base font-bold text-white">{title}</h3>
           <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-white transition" style={{ background: "rgba(255,255,255,0.07)" }}>✕</button>
         </div>
-        <div className="p-6">{children}</div>
+        <div className="p-6 modal-safe">{children}</div>
       </div>
     </div>
   );
@@ -816,10 +816,10 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "#0a0f1a", fontFamily: "'DM Sans',system-ui,sans-serif" }}>
-      <header className="sticky top-0 z-40 border-b border-white/5" style={{ background: "rgba(10,15,26,0.95)", backdropFilter: "blur(20px)" }}>
+      <header className="sticky top-0 z-40 border-b border-white/5 header-safe" style={{ background: "rgba(10,15,26,0.95)", backdropFilter: "blur(20px)" }}>
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div><h1 className="text-base font-bold text-white tracking-tight">Controle do Semestre</h1><p className="text-xs text-slate-500">{items.length} atividades · {disciplines.length} disciplinas · meta {meta}</p></div>
-          <div className="flex gap-2">
+          <div className="min-w-0"><h1 className="text-base font-bold text-white tracking-tight truncate">Controle do Semestre</h1><p className="text-xs text-slate-500 truncate">{items.length} atividades · {disciplines.length} disciplinas · meta {meta}</p></div>
+          <div className="flex gap-2 shrink-0">
             <button onClick={() => setModal("import")} className="w-8 h-8 rounded-xl flex items-center justify-center text-sm text-slate-400 hover:text-white transition" style={{ background: "rgba(255,255,255,0.06)" }} title="Importar">📂</button>
             <button onClick={() => setModal("export")} className="w-8 h-8 rounded-xl flex items-center justify-center text-sm text-slate-400 hover:text-white transition" style={{ background: "rgba(255,255,255,0.06)" }} title="Exportar">📥</button>
             <button onClick={signOut} className="w-8 h-8 rounded-xl flex items-center justify-center text-sm text-slate-400 hover:text-white transition" style={{ background: "rgba(255,255,255,0.06)" }} title="Sair">🚪</button>
@@ -844,7 +844,7 @@ export default function App() {
       {dataLoading ? (
         <div className="flex-1 flex items-center justify-center"><p className="text-slate-500 text-sm">Carregando suas atividades...</p></div>
       ) : (
-        <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-6" style={{ paddingBottom: "calc(80px + var(--sab, 0px))" }}>
+        <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-6 px-safe" style={{ paddingBottom: "calc(80px + var(--sab, 0px))" }}>
           {tab === "dashboard"   && <DashboardTab   items={items} stats={stats} meta={meta} />}
           {tab === "disciplines" && <DisciplineTab  items={items} stats={stats} meta={meta} onEditItem={handleEdit} onDeleteItem={handleDelete} onQuickGrade={handleQuickGrade} />}
           {tab === "plano"       && <PlanejamentoTab stats={stats} meta={meta} onChangeMeta={handleChangeMeta} />}
@@ -854,7 +854,7 @@ export default function App() {
       )}
 
       {/* Barra de navegação fixa estilo app — ícones (mobile) + rótulo (desktop) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10" style={{ background: "rgba(10,15,26,0.97)", backdropFilter: "blur(20px)", paddingBottom: "var(--sab, 0px)" }} aria-label="Navegação principal">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 nav-safe" style={{ background: "rgba(10,15,26,0.97)", backdropFilter: "blur(20px)" }} aria-label="Navegação principal">
         <div className="max-w-2xl mx-auto px-2 flex">
           {TABS.map(t => {
             const active = tab === t.id;

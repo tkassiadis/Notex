@@ -38,6 +38,31 @@ html, body, #root {
   padding-top: var(--sat);
 }
 
+/* ── Safe areas laterais (notch em landscape, bordas curvas) ── */
+.px-safe {
+  padding-left: var(--sal);
+  padding-right: var(--sar);
+}
+
+/* Header fixo: cobre o topo incluindo a safe area do notch */
+.header-safe {
+  padding-top: var(--sat);
+  padding-left: var(--sal);
+  padding-right: var(--sar);
+}
+
+/* Barra de navegação inferior: respeita home indicator e laterais */
+.nav-safe {
+  padding-bottom: var(--sab);
+  padding-left: var(--sal);
+  padding-right: var(--sar);
+}
+
+/* Modais: conteúdo nunca atrás do home indicator */
+.modal-safe {
+  padding-bottom: calc(1.5rem + var(--sab));
+}
+
 /* ── Inputs: previne zoom automático no iOS (fonte mín. 16px) ── */
 input[type="text"],
 input[type="number"],
