@@ -766,6 +766,7 @@ function QuickGradePanel({ item, stats, meta, onSave, onClose }: {
 
 const TABS = [
   { id: "dashboard", label: "Dashboard", icon: "⚡" },
+  { id: "disciplines", label: "Disciplinas", icon: "📖" },
   { id: "plano", label: "Planejamento", icon: "🎯" },
   { id: "alerts", label: "Alertas", icon: "🔔" },
   { id: "calendar", label: "Calendário", icon: "📅" },
