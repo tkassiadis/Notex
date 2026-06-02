@@ -134,6 +134,34 @@ function notaColor(nota: number | null, meta: number) {
   return "#ef4444";
 }
 
+// ─── CLASSIFICAÇÃO DE ITEM (P10) ──────────────────────────────
+// Categorias automáticas, válidas para Avaliações e Eventos.
+type CatId = "ate3" | "ate7" | "ate14" | "ate30" | "aguardando" | "concluido" | "futuro_distante";
+const CATEGORIAS: { id: CatId; label: string; color: string }[] = [
+  { id: "ate3",       label: "Até 3 dias",          color: "#ef4444" },
+  { id: "ate7",       label: "Até 7 dias",          color: "#f97316" },
+  { id: "ate14",      label: "Até 14 dias",         color: "#eab308" },
+  { id: "ate30",      label: "Até 30 dias",         color: "#6366f1" },
+  { id: "aguardando", label: "Aguardando Correção", color: "#f59e0b" },
+  { id: "concluido",  label: "Concluído",           color: "#10b981" },
+];
+function classificarItem(it: AtividadeEnriquecida): { id: CatId; color: string; label: string } {
+  const isEvento = it.tipo === "evento";
+  const d = it.daysRemaining;
+  // Concluído: avaliação com nota lançada OU evento com data passada
+  const concluido = isEvento ? (d != null && d < 0) : (it.pontuacao != null);
+  if (concluido) return CATEGORIAS.find(c => c.id === "concluido")!;
+  // Aguardando correção: avaliação cuja data passou e ainda sem nota
+  if (!isEvento && d != null && d < 0 && it.pontuacao == null) return CATEGORIAS.find(c => c.id === "aguardando")!;
+  if (d != null) {
+    if (d <= 3)  return CATEGORIAS.find(c => c.id === "ate3")!;
+    if (d <= 7)  return CATEGORIAS.find(c => c.id === "ate7")!;
+    if (d <= 14) return CATEGORIAS.find(c => c.id === "ate14")!;
+    if (d <= 30) return CATEGORIAS.find(c => c.id === "ate30")!;
+  }
+  return { id: "futuro_distante", color: "#64748b", label: "Futuro" };
+}
+
 // ─── ITEM FORM (com seletor de disciplina existente/nova) ─────
 const INPUT_CLS = "w-full rounded-xl px-3 py-2.5 text-sm text-white border border-white/10 outline-none focus:border-indigo-500 transition";
 const INPUT_STY = { background: "rgba(255,255,255,0.06)" };
@@ -539,7 +567,21 @@ function CalendarTab({ items }: { items: AtividadeEnriquecida[] }) {
   const byDate = useMemo(() => { const m: Record<string, AtividadeEnriquecida[]> = {}; items.forEach(it => { if (!it.data) return; if (!m[it.data]) m[it.data] = []; m[it.data].push(it); }); return m; }, [items]);
   const cells = useMemo(() => { const firstDay = new Date(year, month, 1).getDay(); const daysInMonth = new Date(year, month + 1, 0).getDate(); const arr: (number | null)[] = []; for (let i = 0; i < firstDay; i++) arr.push(null); for (let d = 1; d <= daysInMonth; d++) arr.push(d); return arr; }, [year, month]);
   const getDateStr = useCallback((d: number) => `${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`, [year, month]);
-  const getDotColor = useCallback((d: number) => { const dateStr = getDateStr(d); const its = byDate[dateStr]; if (!its || its.length === 0) return null; const target = new Date(dateStr + "T00:00:00"); target.setHours(0,0,0,0); const days = Math.round((target.getTime() - today.getTime()) / 86400000); if (days < 0) return its.some(i => i.pontuacao == null) ? "#f59e0b" : "#10b981"; if (days <= 3) return "#ef4444"; if (days <= 7) return "#f97316"; return "#6366f1"; }, [byDate, getDateStr, today]);
+  const getDotColor = useCallback((d: number) => {
+    const dateStr = getDateStr(d);
+    const its = byDate[dateStr];
+    if (!its || its.length === 0) return null;
+    // Prioridade visual: usa a categoria de maior urgência entre os itens do dia
+    const ordem: CatId[] = ["ate3","ate7","aguardando","ate14","ate30","concluido"];
+    let best: { color: string; rank: number } | null = null;
+    its.forEach(it => {
+      const cat = classificarItem(it);
+      const rank = ordem.indexOf(cat.id);
+      const r = rank === -1 ? 99 : rank;
+      if (best === null || r < best.rank) best = { color: cat.color, rank: r };
+    });
+    return best !== null ? (best as { color: string; rank: number }).color : "#64748b";
+  }, [byDate, getDateStr]);
   const selectedStr = selected ? getDateStr(selected) : null;
   const selectedItems = selectedStr ? (byDate[selectedStr] || []) : [];
   const upcomingList = useMemo(() => items.filter(it => it.daysRemaining != null && it.daysRemaining >= 0).sort((a, b) => (a.daysRemaining ?? 0) - (b.daysRemaining ?? 0)).slice(0, 8), [items]);
@@ -547,8 +589,8 @@ function CalendarTab({ items }: { items: AtividadeEnriquecida[] }) {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between"><button onClick={() => setViewDate(new Date(year, month-1, 1))} className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-white transition" style={{ background: "rgba(255,255,255,0.06)" }}>‹</button><p className="text-sm font-bold text-white">{MONTH_NAMES[month]} {year}</p><button onClick={() => setViewDate(new Date(year, month+1, 1))} className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-white transition" style={{ background: "rgba(255,255,255,0.06)" }}>›</button></div>
       <div className="rounded-2xl overflow-hidden border border-white/5" style={{ background: "rgba(255,255,255,0.04)" }}><div className="grid grid-cols-7 border-b border-white/5">{DAY_NAMES.map(d => <div key={d} className="py-2 text-center text-xs font-semibold text-slate-500">{d}</div>)}</div><div className="grid grid-cols-7">{cells.map((d, i) => { if (!d) return <div key={`e${i}`} className="h-12" />; const dateStr = getDateStr(d); const isToday = dateStr === todayStr; const isSelected = d === selected; const dotColor = getDotColor(d); const count = byDate[dateStr]?.length || 0; return (<button key={d} onClick={() => setSelected(d === selected ? null : d)} className="h-12 flex flex-col items-center justify-center gap-0.5 transition-all" style={{ background: isSelected ? "rgba(99,102,241,0.25)" : isToday ? "rgba(99,102,241,0.1)" : "transparent" }}><span className={`text-xs font-semibold ${isToday ? "text-indigo-400" : isSelected ? "text-white" : "text-slate-300"}`} style={isToday ? { fontWeight: 800 } : {}}>{d}</span>{dotColor && <div className="flex gap-0.5">{count > 3 ? <div className="w-4 h-1 rounded-full" style={{ background: dotColor }} /> : Array.from({ length: Math.min(count, 3) }).map((_, j) => <div key={j} className="w-1 h-1 rounded-full" style={{ background: dotColor }} />)}</div>}</button>); })}</div></div>
-      <div className="flex flex-wrap gap-3">{[["#ef4444","≤ 3 dias"],["#f97316","≤ 7 dias"],["#6366f1","Futuro"],["#f59e0b","Aguard. correção"],["#10b981","Concluído"]].map(([c, l]) => (<div key={l} className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full" style={{ background: c }} /><span className="text-xs text-slate-500">{l}</span></div>))}</div>
-      {selected && <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: "rgba(255,255,255,0.04)" }}><div className="px-4 py-3 border-b border-white/5"><p className="text-sm font-bold text-white">{selected} de {MONTH_NAMES[month]}</p><p className="text-xs text-slate-500">{selectedItems.length === 0 ? "Sem atividades" : `${selectedItems.length} atividade(s)`}</p></div>{selectedItems.length === 0 ? <div className="px-4 py-6 text-center"><p className="text-xs text-slate-500">Nenhuma atividade neste dia</p></div> : <div className="flex flex-col">{selectedItems.map(it => { const nota = calcNota(it.pontuacao, it.pontuacaoMaxima); const days = it.daysRemaining; const dotC = days == null ? "#64748b" : days < 0 && it.pontuacao == null ? "#f59e0b" : days < 0 ? "#10b981" : days <= 3 ? "#ef4444" : days <= 7 ? "#f97316" : "#6366f1"; return (<div key={it.id} className="flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-0"><div className="w-2 h-2 rounded-full shrink-0" style={{ background: dotC }} /><div className="flex-1 min-w-0"><p className="text-sm text-white truncate">{it.instrumento}</p><p className="text-xs text-slate-500">{it.disciplina} · {it.avaliacao}</p></div><div className="text-right shrink-0">{nota != null ? <p className="text-sm font-bold" style={{ color: notaColor(nota, 7) }}>{nota.toFixed(1)}/10</p> : <StatusBadge status={it.status} />}</div></div>); })}</div>}</div>}
+      <div className="flex flex-wrap gap-3">{CATEGORIAS.map(c => (<div key={c.id} className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full" style={{ background: c.color }} /><span className="text-xs text-slate-500">{c.label}</span></div>))}</div>
+      {selected && <div className="rounded-2xl border border-white/5 overflow-hidden" style={{ background: "rgba(255,255,255,0.04)" }}><div className="px-4 py-3 border-b border-white/5"><p className="text-sm font-bold text-white">{selected} de {MONTH_NAMES[month]}</p><p className="text-xs text-slate-500">{selectedItems.length === 0 ? "Sem atividades" : `${selectedItems.length} atividade(s)`}</p></div>{selectedItems.length === 0 ? <div className="px-4 py-6 text-center"><p className="text-xs text-slate-500">Nenhuma atividade neste dia</p></div> : <div className="flex flex-col">{selectedItems.map(it => { const nota = calcNota(it.pontuacao, it.pontuacaoMaxima); const cat = classificarItem(it); const isEvento = it.tipo === "evento"; return (<div key={it.id} className="flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-0"><div className="w-2 h-2 rounded-full shrink-0" style={{ background: cat.color }} /><div className="flex-1 min-w-0"><p className="text-sm text-white truncate">{it.instrumento}</p><p className="text-xs text-slate-500">{it.disciplina} · {isEvento ? "📅 Evento" : it.avaliacao} · <span style={{ color: cat.color }}>{cat.label}</span></p></div><div className="text-right shrink-0">{isEvento ? <span className="text-xs text-cyan-400">evento</span> : nota != null ? <p className="text-sm font-bold" style={{ color: notaColor(nota, 7) }}>{nota.toFixed(1)}/10</p> : <StatusBadge status={it.status} />}</div></div>); })}</div>}</div>}
       <div><p className="text-xs text-slate-500 uppercase tracking-widest font-semibold mb-3">Próximas Atividades</p><div className="flex flex-col gap-2">{upcomingList.map(it => (<div key={it.id} className="rounded-xl px-4 py-3 border border-white/5 flex items-center gap-3" style={{ background: "rgba(255,255,255,0.03)" }}><div className="w-10 h-10 rounded-xl flex flex-col items-center justify-center shrink-0" style={{ background: (it.daysRemaining ?? 99) <= 3 ? "rgba(239,68,68,0.15)" : (it.daysRemaining ?? 99) <= 7 ? "rgba(249,115,22,0.15)" : "rgba(99,102,241,0.15)" }}><span className="text-xs font-bold" style={{ color: (it.daysRemaining ?? 99) <= 3 ? "#ef4444" : (it.daysRemaining ?? 99) <= 7 ? "#f97316" : "#818cf8" }}>{it.daysRemaining}d</span></div><div className="flex-1 min-w-0"><p className="text-sm font-medium text-white truncate">{it.instrumento}</p><p className="text-xs text-slate-500">{it.disciplina} · {it.data}</p></div><StatusBadge status={it.status} /></div>))}</div></div>
     </div>
   );
@@ -650,9 +692,80 @@ function PlanejamentoTab({ stats, meta, onChangeMeta }: { stats: DisciplinaStats
 }
 
 // ─── APP ROOT ─────────────────────────────────────────────────
+// ─── QUICK GRADE PANEL (lançamento rápido de nota) ────────────
+function QuickGradePanel({ item, stats, meta, onSave, onClose }: {
+  item: Atividade; stats: DisciplinaStats[]; meta: number;
+  onSave: (form: Omit<Atividade, "id">) => void | Promise<void>; onClose: () => void;
+}) {
+  const max = item.pontuacaoMaxima && item.pontuacaoMaxima > 0 ? item.pontuacaoMaxima : 10;
+  const step = max <= 10 ? 0.5 : max <= 20 ? 1 : max <= 100 ? 1 : 5;
+  const [pontuacao, setPontuacao] = useState<number>(item.pontuacao ?? Math.round(max * 0.7 / step) * step);
+  const [saving, setSaving] = useState(false);
+  const disc = stats.find(s => s.disciplina === item.disciplina);
+  const nota10 = (pontuacao / max) * 10;
+  const pct = (pontuacao / max) * 100;
+
+  // Projeção: recalcula a média da disciplina substituindo esta nota
+  const mediaProjetada = useMemo(() => {
+    if (!disc) return null;
+    let ws = 0, tw = 0;
+    disc.items.forEach((r) => {
+      if (r.tipo === "evento") return;
+      const w = r.pesoAvaliacao * r.pesoInstrumento;
+      let n = calcNota(r.pontuacao, r.pontuacaoMaxima);
+      if (r.id === item.id) n = nota10;     // usa a nota simulada para este item
+      if (n != null) { ws += n * w; tw += w; }
+    });
+    return tw > 0 ? Math.round((ws / tw) * 100) / 100 : null;
+  }, [disc, item.id, nota10]);
+
+  const color = nota10 >= meta ? "#10b981" : nota10 >= meta - 2 ? "#f59e0b" : "#ef4444";
+  const handleSave = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await onSave({ ...item, pontuacao, pontuacaoMaxima: max, status: "Finalizado" });
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div>
+        <p className="text-sm font-bold text-white">{item.instrumento}</p>
+        <p className="text-xs text-slate-500">{item.disciplina} · {item.avaliacao}</p>
+      </div>
+
+      {/* Nota grande + percentual */}
+      <div className="rounded-2xl p-5 border border-white/5 flex items-center justify-around" style={{ background: "rgba(255,255,255,0.04)" }}>
+        <div className="text-center"><p className="text-xs text-slate-500 mb-1">Pontuação</p><p className="text-2xl font-bold text-white">{pontuacao % 1 === 0 ? pontuacao : pontuacao.toFixed(1)}<span className="text-sm text-slate-500">/{max}</span></p></div>
+        <div className="text-center"><p className="text-xs text-slate-500 mb-1">Nota /10</p><p className="text-2xl font-bold" style={{ color }}>{nota10.toFixed(2)}</p></div>
+        <div className="text-center"><p className="text-xs text-slate-500 mb-1">Percentual</p><p className="text-2xl font-bold" style={{ color }}>{pct.toFixed(0)}%</p></div>
+      </div>
+
+      {/* Slider */}
+      <div>
+        <input type="range" min="0" max={max} step={step} value={pontuacao} onChange={e => setPontuacao(parseFloat(e.target.value))} className="w-full" style={{ accentColor: color }} />
+        <div className="flex justify-between text-xs text-slate-600 mt-1"><span>0</span><span>{(max/2) % 1 === 0 ? max/2 : (max/2).toFixed(1)}</span><span>{max}</span></div>
+      </div>
+
+      {/* Impacto na média */}
+      {disc && (
+        <div className="rounded-xl p-3 border border-white/10 flex items-center justify-between" style={{ background: "rgba(99,102,241,0.08)" }}>
+          <div><p className="text-xs text-slate-400">Média da disciplina</p><p className="text-xs text-slate-600 mt-0.5">{disc.mediaAtual != null ? `Atual: ${disc.mediaAtual.toFixed(2)}` : "Sem notas ainda"}</p></div>
+          <div className="text-right"><p className="text-xs text-slate-500">com esta nota</p><p className="text-xl font-bold" style={{ color: mediaProjetada == null ? "#64748b" : mediaProjetada >= meta ? "#10b981" : "#ef4444" }}>{mediaProjetada != null ? mediaProjetada.toFixed(2) : "—"}</p></div>
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <button onClick={onClose} disabled={saving} className="flex-1 py-3 rounded-xl text-sm font-semibold text-slate-400 border border-white/10 disabled:opacity-40">Cancelar</button>
+        <button onClick={handleSave} disabled={saving} className="flex-1 py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-60" style={{ background: "linear-gradient(135deg,#10b981,#059669)" }}>{saving ? "Salvando..." : "Lançar Nota"}</button>
+      </div>
+    </div>
+  );
+}
+
 const TABS = [
   { id: "dashboard", label: "Dashboard", icon: "⚡" },
-  { id: "disciplines", label: "Disciplinas", icon: "📖" },
   { id: "plano", label: "Planejamento", icon: "🎯" },
   { id: "alerts", label: "Alertas", icon: "🔔" },
   { id: "calendar", label: "Calendário", icon: "📅" },
@@ -688,7 +801,7 @@ export default function App() {
   }, [editingItem, addAtividade, updateAtividade]);
 
   const handleEdit = useCallback((item: Atividade) => { setEditingItem(item); setModal("edit"); }, []);
-  const handleQuickGrade = useCallback((item: Atividade) => { setEditingItem(item); setModal("edit"); }, []);
+  const handleQuickGrade = useCallback((item: Atividade) => { setEditingItem(item); setModal("quickgrade"); }, []);
   const handleDelete = useCallback((id: string) => { setDeleteId(id); setModal("delete"); }, []);
   const confirmDelete = useCallback(async () => {
     if (deleteId) await deleteAtividade(deleteId);
@@ -759,6 +872,9 @@ export default function App() {
 
       <Modal open={modal === "add" || modal === "edit"} onClose={() => { setModal(null); setEditingItem(null); }} title={modal === "edit" ? "Editar Atividade" : "Nova Atividade"}>
         <ItemForm item={editingItem} onSave={handleSave} onClose={() => { setModal(null); setEditingItem(null); }} disciplines={disciplines} />
+      </Modal>
+      <Modal open={modal === "quickgrade" && !!editingItem} onClose={() => { setModal(null); setEditingItem(null); }} title="🎯 Lançar Nota">
+        {editingItem && <QuickGradePanel item={editingItem} stats={stats} meta={meta} onSave={handleSave} onClose={() => { setModal(null); setEditingItem(null); }} />}
       </Modal>
       <Modal open={modal === "import"} onClose={() => setModal(null)} title="Importar Planilha">
         <ImportPanel onImport={importAtividades} onClose={() => setModal(null)} />
