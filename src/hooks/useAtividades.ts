@@ -19,6 +19,7 @@ import type { Atividade, AtividadeRow } from "../types";
 function rowToAtividade(row: AtividadeRow): Atividade {
   return {
     id: row.id,
+    tipo: (row.tipo === "evento" ? "evento" : "avaliacao"),
     avaliacao: row.avaliacao,
     instrumento: row.instrumento,
     disciplina: row.disciplina,
@@ -39,6 +40,7 @@ function atividadeToInsert(
 ): Omit<AtividadeRow, "id" | "created_at" | "updated_at"> {
   return {
     user_id: userId,
+    tipo: item.tipo || "avaliacao",
     avaliacao: item.avaliacao,
     instrumento: item.instrumento,
     disciplina: item.disciplina,
@@ -57,6 +59,7 @@ function atividadeToUpdate(
   item: Atividade
 ): Partial<Omit<AtividadeRow, "id" | "user_id" | "created_at" | "updated_at">> {
   return {
+    tipo: item.tipo || "avaliacao",
     avaliacao: item.avaliacao,
     instrumento: item.instrumento,
     disciplina: item.disciplina,

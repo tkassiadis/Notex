@@ -39,9 +39,12 @@ export function getDisciplineStats(
   });
 
   return Object.entries(byDisc).map(([disc, rows], idx) => {
+    // EVENTOS não entram em nenhum cálculo acadêmico — apenas avaliações.
+    const avaliacoes = rows.filter((r) => r.tipo !== "evento");
+
     let weightedSum = 0, weightUsed = 0;
 
-    rows.forEach((r) => {
+    avaliacoes.forEach((r) => {
       const nota = calcNota(r.pontuacao, r.pontuacaoMaxima);
       if (nota != null) {
         weightedSum += nota * r.pesoAvaliacao * r.pesoInstrumento;
@@ -50,8 +53,8 @@ export function getDisciplineStats(
     });
 
     const mediaAtual    = weightUsed > 0 ? weightedSum / weightUsed : null;
-    const pesoConcluido = rows.reduce((a, r) => r.pontuacao != null ? a + r.pesoAvaliacao * r.pesoInstrumento : a, 0);
-    const pesoRestante  = rows.reduce((a, r) => r.pontuacao == null ? a + r.pesoAvaliacao * r.pesoInstrumento : a, 0);
+    const pesoConcluido = avaliacoes.reduce((a, r) => r.pontuacao != null ? a + r.pesoAvaliacao * r.pesoInstrumento : a, 0);
+    const pesoRestante  = avaliacoes.reduce((a, r) => r.pontuacao == null ? a + r.pesoAvaliacao * r.pesoInstrumento : a, 0);
     const pesoTotal     = pesoConcluido + pesoRestante;
 
     const notaNecessariaRaw = pesoRestante > 0.001
@@ -72,7 +75,7 @@ export function getDisciplineStats(
 
     return {
       disciplina: disc,
-      items: rows,
+      items: rows,        // lista completa (avaliações + eventos) para UI/calendário/alertas
       mediaAtual:    mediaAtual != null ? Math.round(mediaAtual * 100) / 100 : null,
       pesoConcluido: Math.round(pesoConcluido * 1000) / 10,
       pesoRestante:  Math.round(pesoRestante  * 1000) / 10,
@@ -86,7 +89,7 @@ export function getDisciplineStats(
         "Finalizado":   rows.filter((r) => r.status === "Finalizado").length,
       },
       proximas:           rows.filter((r) => r.daysRemaining != null && r.daysRemaining >= 0 && r.daysRemaining <= 14),
-      aguardandoCorrecao: rows.filter((r) => r.daysRemaining != null && r.daysRemaining < 0 && r.pontuacao == null),
+      aguardandoCorrecao: avaliacoes.filter((r) => r.daysRemaining != null && r.daysRemaining < 0 && r.pontuacao == null),
       color:   DISC_COLORS[idx % DISC_COLORS.length],
       emRisco: mediaAtual != null && !aprovacaoGarantida &&
                (aprovacaoImpossivel || (notaNecessaria != null && notaNecessaria > 8)),

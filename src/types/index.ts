@@ -4,6 +4,7 @@
 
 export interface Atividade {
   id: string;
+  tipo: TipoItem;                // "avaliacao" (afeta médias) | "evento" (só registro)
   avaliacao: string;
   instrumento: string;
   disciplina: string;
@@ -21,6 +22,8 @@ export interface AtividadeEnriquecida extends Atividade {
   daysRemaining: number | null;
 }
 
+export type TipoItem = "avaliacao" | "evento";
+
 export type StatusOption =
   | "Não iniciado"
   | "Estudo inicial"
@@ -28,7 +31,7 @@ export type StatusOption =
   | "Estudo avançado"
   | "Finalizado";
 
-export type AvaliacaoOption = "AP1" | "AP2" | "AS" | "AF" | "Trabalho";
+export type AvaliacaoOption = "AP1" | "AP2" | "AS" | "AF" | "Evento";
 
 export interface DisciplinaStats {
   disciplina: string;
@@ -63,6 +66,7 @@ export interface Profile {
 export interface AtividadeRow {
   id: string;
   user_id: string;
+  tipo: string;
   avaliacao: string;
   instrumento: string;
   disciplina: string;

@@ -17,7 +17,7 @@ import type { Atividade, AtividadeEnriquecida, DisciplinaStats } from "../types"
 
 // ─── CONSTANTES ──────────────────────────────────────────────
 const STATUS_OPTIONS = ["Não iniciado", "Estudo inicial", "Estudo médio", "Estudo avançado", "Finalizado"];
-const AVALIACAO_OPTIONS = ["AP1", "AP2", "AS", "AF", "Trabalho"];
+const AVALIACAO_OPTIONS = ["AP1", "AP2", "AS", "AF"];
 const STATUS_COLORS: Record<string, string> = {
   "Não iniciado": "#64748b", "Estudo inicial": "#f59e0b",
   "Estudo médio": "#f97316", "Estudo avançado": "#06b6d4", "Finalizado": "#10b981",
@@ -149,6 +149,7 @@ function ItemForm({ item, onSave, onClose, disciplines }: {
     isEditing ? (itemDiscExists ? "existing" : "new") : (disciplines.length > 0 ? "existing" : "new")
   );
   const [newDiscName, setNewDiscName] = useState(isEditing && !itemDiscExists ? (item?.disciplina || "") : "");
+  const [tipo, setTipo] = useState<"avaliacao" | "evento">(item?.tipo === "evento" ? "evento" : "avaliacao");
   const [form, setForm] = useState<any>(() => {
     const base: any = item || { avaliacao: "AP1", instrumento: "", disciplina: disciplines[0] || "", subdivisao: "", status: "Não iniciado", data: "", pesoAvaliacao: 0.2, pesoInstrumento: 1.0, pontuacaoMaxima: null, pontuacao: null, observacoes: "" };
     return { ...base, _pa: toStr(base.pesoAvaliacao), _pi: toStr(base.pesoInstrumento), _pm: toStr(base.pontuacaoMaxima), _p: toStr(base.pontuacao) };
@@ -156,6 +157,7 @@ function ItemForm({ item, onSave, onClose, disciplines }: {
   const [errors, setErrors] = useState<any>({});
   const [saving, setSaving] = useState(false);          // FIX BUG2: trava contra duplo-clique
   const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
+  const isEvento = tipo === "evento";
   const disciplinaFinal = discMode === "existing" ? form.disciplina : newDiscName.trim();
   const handleSave = async () => {
     if (saving) return;                                  // FIX BUG2: ignora cliques repetidos
@@ -166,7 +168,12 @@ function ItemForm({ item, onSave, onClose, disciplines }: {
     setErrors({});
     setSaving(true);
     try {
-      await onSave({ ...form, disciplina: disciplinaFinal, pesoAvaliacao: parseDecimal(form._pa) ?? 0, pesoInstrumento: parseDecimal(form._pi) ?? 0, pontuacaoMaxima: parseDecimal(form._pm), pontuacao: parseDecimal(form._p) });
+      if (isEvento) {
+        // Eventos: sem nota, sem peso — não afetam cálculos
+        await onSave({ ...form, tipo: "evento", avaliacao: "Evento", disciplina: disciplinaFinal, pesoAvaliacao: 0, pesoInstrumento: 0, pontuacaoMaxima: null, pontuacao: null });
+      } else {
+        await onSave({ ...form, tipo: "avaliacao", disciplina: disciplinaFinal, pesoAvaliacao: parseDecimal(form._pa) ?? 0, pesoInstrumento: parseDecimal(form._pi) ?? 0, pontuacaoMaxima: parseDecimal(form._pm), pontuacao: parseDecimal(form._p) });
+      }
     } finally {
       setSaving(false);
     }
@@ -174,8 +181,26 @@ function ItemForm({ item, onSave, onClose, disciplines }: {
   const errCls = "border-red-500/60";
   return (
     <div className="flex flex-col gap-4">
+      {/* Seletor de tipo: Avaliação ou Evento */}
+      <div className="flex rounded-xl overflow-hidden border border-white/10" style={{ background: "rgba(255,255,255,0.03)" }}>
+        <button type="button" onClick={() => setTipo("avaliacao")}
+          className={`flex-1 py-2.5 text-xs font-semibold transition flex items-center justify-center gap-1.5 ${tipo === "avaliacao" ? "text-white" : "text-slate-500 hover:text-slate-300"}`}
+          style={tipo === "avaliacao" ? { background: "linear-gradient(135deg,#6366f1,#8b5cf6)" } : {}}>
+          📊 Avaliação
+        </button>
+        <button type="button" onClick={() => setTipo("evento")}
+          className={`flex-1 py-2.5 text-xs font-semibold transition flex items-center justify-center gap-1.5 ${tipo === "evento" ? "text-white" : "text-slate-500 hover:text-slate-300"}`}
+          style={tipo === "evento" ? { background: "linear-gradient(135deg,#06b6d4,#0891b2)" } : {}}>
+          📅 Evento
+        </button>
+      </div>
+      {isEvento && <p className="text-xs text-slate-500 -mt-1">Eventos (palestras, entregas, visitas) não têm nota nem peso e não afetam suas médias.</p>}
       <div className="grid grid-cols-2 gap-3">
-        <FormField label="Avaliação"><select value={form.avaliacao} onChange={e => set("avaliacao", e.target.value)} className={INPUT_CLS} style={INPUT_STY}>{AVALIACAO_OPTIONS.map(o => <option key={o}>{o}</option>)}</select></FormField>
+        {isEvento ? (
+          <FormField label="Tipo"><div className={INPUT_CLS} style={{ ...INPUT_STY, opacity: 0.7 }}>📅 Evento</div></FormField>
+        ) : (
+          <FormField label="Avaliação"><select value={form.avaliacao} onChange={e => set("avaliacao", e.target.value)} className={INPUT_CLS} style={INPUT_STY}>{AVALIACAO_OPTIONS.map(o => <option key={o}>{o}</option>)}</select></FormField>
+        )}
         <FormField label="Status"><select value={form.status} onChange={e => set("status", e.target.value)} className={INPUT_CLS} style={INPUT_STY}>{STATUS_OPTIONS.map(o => <option key={o}>{o}</option>)}</select></FormField>
       </div>
       <FormField label={`Instrumento${errors.instrumento ? " — obrigatório" : ""}`}>
@@ -210,14 +235,18 @@ function ItemForm({ item, onSave, onClose, disciplines }: {
       </FormField>
       <FormField label="Subdivisão"><input value={form.subdivisao} onChange={e => set("subdivisao", e.target.value)} className={INPUT_CLS} style={INPUT_STY} placeholder="Ex: Pneumo e Cardio" /></FormField>
       <FormField label="Data"><input type="date" value={form.data} onChange={e => set("data", e.target.value)} className={INPUT_CLS} style={INPUT_STY} /></FormField>
-      <div className="grid grid-cols-2 gap-3">
-        <FormField label="Peso Avaliação (0–1)"><input type="text" inputMode="decimal" value={form._pa} onChange={e => set("_pa", e.target.value)} className={INPUT_CLS} style={INPUT_STY} placeholder="Ex: 0,3" /></FormField>
-        <FormField label="Peso Instrumento (0–1)"><input type="text" inputMode="decimal" value={form._pi} onChange={e => set("_pi", e.target.value)} className={INPUT_CLS} style={INPUT_STY} placeholder="Ex: 0,5" /></FormField>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <FormField label="Pontuação Máxima"><input type="text" inputMode="decimal" value={form._pm} onChange={e => set("_pm", e.target.value)} className={INPUT_CLS} style={INPUT_STY} placeholder="Ex: 10" /></FormField>
-        <FormField label="Pontuação Obtida"><input type="text" inputMode="decimal" value={form._p} onChange={e => set("_p", e.target.value)} className={INPUT_CLS} style={INPUT_STY} placeholder="Ex: 7,5" /></FormField>
-      </div>
+      {!isEvento && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Peso Avaliação (0–1)"><input type="text" inputMode="decimal" value={form._pa} onChange={e => set("_pa", e.target.value)} className={INPUT_CLS} style={INPUT_STY} placeholder="Ex: 0,3" /></FormField>
+            <FormField label="Peso Instrumento (0–1)"><input type="text" inputMode="decimal" value={form._pi} onChange={e => set("_pi", e.target.value)} className={INPUT_CLS} style={INPUT_STY} placeholder="Ex: 0,5" /></FormField>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Pontuação Máxima"><input type="text" inputMode="decimal" value={form._pm} onChange={e => set("_pm", e.target.value)} className={INPUT_CLS} style={INPUT_STY} placeholder="Ex: 10" /></FormField>
+            <FormField label="Pontuação Obtida"><input type="text" inputMode="decimal" value={form._p} onChange={e => set("_p", e.target.value)} className={INPUT_CLS} style={INPUT_STY} placeholder="Ex: 7,5" /></FormField>
+          </div>
+        </>
+      )}
       <FormField label="Observações"><textarea value={form.observacoes} onChange={e => set("observacoes", e.target.value)} rows={2} className={INPUT_CLS} style={INPUT_STY} placeholder="Anotações opcionais..." /></FormField>
       <div className="flex gap-2 mt-2">
         <button onClick={onClose} disabled={saving} className="flex-1 py-3 rounded-xl text-sm font-semibold text-slate-400 border border-white/10 disabled:opacity-40">Cancelar</button>
@@ -683,7 +712,7 @@ export default function App() {
 
   const items = useMemo(() => atividades.map(enrichItem), [atividades]);
   const stats = useMemo(() => getDisciplineStats(items, meta), [items, meta]);
-  const disciplines = useMemo(() => [...new Set(items.map(it => it.disciplina))], [items]);
+  const disciplines = useMemo<string[]>(() => Array.from(new Set(items.map(it => it.disciplina))), [items]);
 
   const handleSave = useCallback(async (form: Omit<Atividade, "id">) => {
     // Erros sobem para o ItemForm (que libera o botão); modal só fecha no sucesso
