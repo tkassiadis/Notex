@@ -692,12 +692,29 @@ function QuickGradePanel({ item, stats, meta, onSave, onClose }: {
   onSave: (form: Omit<Atividade, "id">) => void | Promise<void>; onClose: () => void;
 }) {
   const max = item.pontuacaoMaxima && item.pontuacaoMaxima > 0 ? item.pontuacaoMaxima : 10;
-  const step = max <= 10 ? 0.5 : max <= 20 ? 1 : max <= 100 ? 1 : 5;
-  const [pontuacao, setPontuacao] = useState<number>(item.pontuacao ?? Math.round(max * 0.7 / step) * step);
+  const toStr = (v: number) => (v % 1 === 0 ? String(v) : String(v).replace(".", ","));
+  const inicial = item.pontuacao ?? Math.round(max * 0.7 * 100) / 100;
+  const [pontuacao, setPontuacao] = useState<number>(inicial);
+  const [pontTexto, setPontTexto] = useState<string>(toStr(inicial));   // digitação livre
   const [saving, setSaving] = useState(false);
   const disc = stats.find(s => s.disciplina === item.disciplina);
   const nota10 = (pontuacao / max) * 10;
   const pct = (pontuacao / max) * 100;
+
+  // Sincroniza o texto digitado → número (aceita vírgula e qualquer casa decimal)
+  const onChangeTexto = (txt: string) => {
+    setPontTexto(txt);
+    const n = parseDecimal(txt);
+    if (n != null) {
+      const clamped = Math.max(0, Math.min(max, n));
+      setPontuacao(clamped);
+    }
+  };
+  // Slider → número e texto
+  const onChangeSlider = (v: number) => {
+    setPontuacao(v);
+    setPontTexto(toStr(Math.round(v * 100) / 100));
+  };
 
   // Projeção: recalcula a média da disciplina substituindo esta nota
   const mediaProjetada = useMemo(() => {
@@ -729,17 +746,22 @@ function QuickGradePanel({ item, stats, meta, onSave, onClose }: {
         <p className="text-xs text-slate-500">{item.disciplina} · {item.avaliacao}</p>
       </div>
 
+      {/* Campo de digitação livre da pontuação */}
+      <FormField label={`Pontuação obtida (0 a ${toStr(max)})`}>
+        <input type="text" inputMode="decimal" value={pontTexto} onChange={e => onChangeTexto(e.target.value)} className={INPUT_CLS} style={INPUT_STY} placeholder={`Ex: 8,75`} />
+      </FormField>
+
       {/* Nota grande + percentual */}
       <div className="rounded-2xl p-5 border border-white/5 flex items-center justify-around" style={{ background: "rgba(255,255,255,0.04)" }}>
-        <div className="text-center"><p className="text-xs text-slate-500 mb-1">Pontuação</p><p className="text-2xl font-bold text-white">{pontuacao % 1 === 0 ? pontuacao : pontuacao.toFixed(1)}<span className="text-sm text-slate-500">/{max}</span></p></div>
+        <div className="text-center"><p className="text-xs text-slate-500 mb-1">Pontuação</p><p className="text-2xl font-bold text-white">{pontuacao % 1 === 0 ? pontuacao : pontuacao.toFixed(2)}<span className="text-sm text-slate-500">/{toStr(max)}</span></p></div>
         <div className="text-center"><p className="text-xs text-slate-500 mb-1">Nota /10</p><p className="text-2xl font-bold" style={{ color }}>{nota10.toFixed(2)}</p></div>
         <div className="text-center"><p className="text-xs text-slate-500 mb-1">Percentual</p><p className="text-2xl font-bold" style={{ color }}>{pct.toFixed(0)}%</p></div>
       </div>
 
-      {/* Slider */}
+      {/* Slider (passo fino, ajuste rápido) */}
       <div>
-        <input type="range" min="0" max={max} step={step} value={pontuacao} onChange={e => setPontuacao(parseFloat(e.target.value))} className="w-full" style={{ accentColor: color }} />
-        <div className="flex justify-between text-xs text-slate-600 mt-1"><span>0</span><span>{(max/2) % 1 === 0 ? max/2 : (max/2).toFixed(1)}</span><span>{max}</span></div>
+        <input type="range" min="0" max={max} step={max <= 10 ? 0.05 : max <= 100 ? 0.5 : 1} value={pontuacao} onChange={e => onChangeSlider(parseFloat(e.target.value))} className="w-full" style={{ accentColor: color }} />
+        <div className="flex justify-between text-xs text-slate-600 mt-1"><span>0</span><span>{(max/2) % 1 === 0 ? max/2 : (max/2).toFixed(1)}</span><span>{toStr(max)}</span></div>
       </div>
 
       {/* Impacto na média */}
@@ -963,10 +985,10 @@ export default function App() {
               {showAddMenu && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowAddMenu(false)} />
-                  <div className="absolute right-0 mt-2 w-52 rounded-2xl border border-white/10 overflow-hidden z-50 shadow-2xl" style={{ background: "#111827" }}>
-                    <button onClick={openNovaDisciplina} className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-white hover:bg-white/5 transition border-b border-white/5"><span className="text-base">📚</span><div><p className="font-semibold">Nova Disciplina</p><p className="text-xs text-slate-500">Configurar com avaliações</p></div></button>
-                    <button onClick={openNovaAvaliacao} className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-white hover:bg-white/5 transition border-b border-white/5"><span className="text-base">📊</span><div><p className="font-semibold">Nova Avaliação</p><p className="text-xs text-slate-500">Prova, trabalho, seminário</p></div></button>
-                    <button onClick={openNovoEvento} className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-white hover:bg-white/5 transition"><span className="text-base">📅</span><div><p className="font-semibold">Novo Evento</p><p className="text-xs text-slate-500">Palestra, entrega, visita</p></div></button>
+                  <div className="absolute right-0 mt-2 w-48 rounded-2xl border border-white/10 overflow-hidden z-50 shadow-2xl" style={{ background: "#111827" }}>
+                    <button onClick={openNovaDisciplina} className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm font-medium text-white hover:bg-white/5 transition"><span className="text-base">📚</span>Nova Disciplina</button>
+                    <button onClick={openNovaAvaliacao} className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm font-medium text-white hover:bg-white/5 transition"><span className="text-base">📊</span>Nova Avaliação</button>
+                    <button onClick={openNovoEvento} className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm font-medium text-white hover:bg-white/5 transition"><span className="text-base">📅</span>Novo Evento</button>
                   </div>
                 </>
               )}
