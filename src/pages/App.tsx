@@ -462,14 +462,14 @@ function DashboardTab({ items, stats, meta }: { items: AtividadeEnriquecida[]; s
 }
 
 // ─── DISCIPLINE TAB ───────────────────────────────────────────
-function DisciplineTab({ items, stats, meta, onEditItem, onDeleteItem, onQuickGrade }: { items: AtividadeEnriquecida[]; stats: DisciplinaStats[]; meta: number; onEditItem: (item: Atividade) => void; onDeleteItem: (id: string) => void; onQuickGrade?: (item: Atividade) => void }) {
+function DisciplineTab({ items, stats, meta, onEditItem, onDeleteItem, onQuickGrade, onDeleteDisciplina }: { items: AtividadeEnriquecida[]; stats: DisciplinaStats[]; meta: number; onEditItem: (item: Atividade) => void; onDeleteItem: (id: string) => void; onQuickGrade?: (item: Atividade) => void; onDeleteDisciplina?: (d: DisciplinaStats) => void }) {
   const [selected, setSelected] = useState<string | null>(null);
   const disc = selected ? stats.find(s => s.disciplina === selected) : null;
   if (disc) return (
     <div className="flex flex-col gap-4">
       <button onClick={() => setSelected(null)} className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition"><span>←</span> Todas as disciplinas</button>
       <div className="rounded-2xl p-5 border border-white/5" style={{ background: "rgba(255,255,255,0.04)" }}>
-        <div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg" style={{ background: `${disc.color}22` }}>📖</div><div className="min-w-0"><h2 className="text-lg font-bold text-white truncate">{disc.disciplina}</h2><p className="text-xs text-slate-500">{disc.items.length} {disc.items.length === 1 ? "item" : "itens"} · {disc.tipoDisciplina}</p></div></div>
+        <div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg" style={{ background: `${disc.color}22` }}>📖</div><div className="min-w-0 flex-1"><h2 className="text-lg font-bold text-white truncate">{disc.disciplina}</h2><p className="text-xs text-slate-500">{disc.items.length} {disc.items.length === 1 ? "item" : "itens"} · {disc.tipoDisciplina}</p></div>{onDeleteDisciplina && disc.disciplinaId && <button onClick={() => onDeleteDisciplina(disc)} className="w-8 h-8 rounded-lg flex items-center justify-center text-sm text-red-400 hover:text-red-300 transition shrink-0" style={{ background: "rgba(239,68,68,0.1)" }} title="Excluir disciplina">🗑</button>}</div>
         {disc.observacoes && <div className="mb-4 p-3 rounded-xl border border-white/5" style={{ background: "rgba(255,255,255,0.03)" }}><p className="text-xs text-slate-400"><span className="text-slate-600">Observações: </span>{disc.observacoes}</p></div>}
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div className="rounded-xl p-3 border border-white/5" style={{ background: "rgba(255,255,255,0.04)" }}><p className="text-xs text-slate-500 mb-1">Média Atual</p><p className="text-2xl font-bold" style={{ color: disc.color }}>{disc.mediaAtual?.toFixed(2) ?? "—"}</p></div>
@@ -761,11 +761,20 @@ function QuickGradePanel({ item, stats, meta, onSave, onClose }: {
   }, [disc, item.id, nota10]);
 
   const color = nota10 >= meta ? "#10b981" : nota10 >= meta - 2 ? "#f59e0b" : "#ef4444";
+  const temNotaLancada = item.pontuacao != null;
   const handleSave = async () => {
     if (saving) return;
     setSaving(true);
     try {
       await onSave({ ...item, pontuacao, pontuacaoMaxima: max, status: "Finalizado" });
+    } finally { setSaving(false); }
+  };
+  const handleRemove = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      // Limpa a nota e volta a avaliação para "aguardando" (sem nota)
+      await onSave({ ...item, pontuacao: null, status: "Não iniciado" });
     } finally { setSaving(false); }
   };
 
@@ -802,9 +811,12 @@ function QuickGradePanel({ item, stats, meta, onSave, onClose }: {
         </div>
       )}
 
-      <div className="flex gap-2">
-        <button onClick={onClose} disabled={saving} className="flex-1 py-3 rounded-xl text-sm font-semibold text-slate-400 border border-white/10 disabled:opacity-40">Cancelar</button>
-        <button onClick={handleSave} disabled={saving} className="flex-1 py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-60" style={{ background: "linear-gradient(135deg,#10b981,#059669)" }}>{saving ? "Salvando..." : "Lançar Nota"}</button>
+      <div className="flex flex-col gap-2">
+        <div className="flex gap-2">
+          <button onClick={onClose} disabled={saving} className="flex-1 py-3 rounded-xl text-sm font-semibold text-slate-400 border border-white/10 disabled:opacity-40">Cancelar</button>
+          <button onClick={handleSave} disabled={saving} className="flex-1 py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-60" style={{ background: "linear-gradient(135deg,#10b981,#059669)" }}>{saving ? "Salvando..." : (temNotaLancada ? "Atualizar Nota" : "Lançar Nota")}</button>
+        </div>
+        {temNotaLancada && <button onClick={handleRemove} disabled={saving} className="w-full py-2.5 rounded-xl text-sm font-semibold text-red-400 border border-red-500/30 disabled:opacity-40" style={{ background: "rgba(239,68,68,0.08)" }}>Remover nota lançada</button>}
       </div>
     </div>
   );
@@ -997,7 +1009,7 @@ export default function App() {
   const { user, loading: authLoading, signIn, signUp, signOut } = useAuth();
   const { atividades, loading: dataLoading, error, addAtividade, updateAtividade, deleteAtividade, importAtividades } = useAtividades(user);
   const { profile, updateMeta } = useProfile(user);
-  const { disciplinas, addDisciplina } = useDisciplinas(user);
+  const { disciplinas, addDisciplina, deleteDisciplina } = useDisciplinas(user);
 
   const [tab, setTab] = useState("dashboard");
   const [modal, setModal] = useState<string | null>(null);
@@ -1006,6 +1018,18 @@ export default function App() {
   const [localMeta, setLocalMeta] = useState(7);
   const [showAddMenu, setShowAddMenu] = useState(false);          // menu do botão "+"
   const [novoTipo, setNovoTipo] = useState<"avaliacao" | "evento">("avaliacao"); // pré-seleção do ItemForm
+  // Escala da interface (persistida localmente). 0.9 = Pequeno, 1 = Médio, 1.15 = Grande
+  const [escala, setEscala] = useState<number>(() => {
+    try { const v = parseFloat(localStorage.getItem("ui-escala") || "1"); return isNaN(v) ? 1 : v; } catch { return 1; }
+  });
+  const aplicarEscala = useCallback((v: number) => {
+    setEscala(v);
+    try { localStorage.setItem("ui-escala", String(v)); } catch { /* ignora */ }
+  }, []);
+  useEffect(() => {
+    // Aplica a escala como font-size base (rem/Tailwind reagem proporcionalmente)
+    try { document.documentElement.style.fontSize = `${16 * escala}px`; } catch { /* ignora */ }
+  }, [escala]);
 
   const meta = profile?.metaAprovacao ?? localMeta;
 
@@ -1073,6 +1097,26 @@ export default function App() {
     setModal(null); setDeleteId(null);
   }, [deleteId, deleteAtividade]);
 
+  // Exclusão de disciplina (com dupla confirmação) — remove a disciplina E suas avaliações
+  const [discToDelete, setDiscToDelete] = useState<DisciplinaStats | null>(null);
+  const [discDeleteStep, setDiscDeleteStep] = useState(1);
+  const handleDeleteDisciplina = useCallback((d: DisciplinaStats) => {
+    setDiscToDelete(d); setDiscDeleteStep(1); setModal("deletedisc");
+  }, []);
+  const confirmDeleteDisciplina = useCallback(async () => {
+    if (!discToDelete) return;
+    // 1. Exclui todas as avaliações/eventos ligados à disciplina
+    const itensDaDisc = atividades.filter(a => a.disciplina === discToDelete.disciplina || (discToDelete.disciplinaId && a.disciplinaId === discToDelete.disciplinaId));
+    for (const it of itensDaDisc) {
+      await deleteAtividade(it.id);
+    }
+    // 2. Exclui a disciplina (se existir como entidade)
+    if (discToDelete.disciplinaId) {
+      await deleteDisciplina(discToDelete.disciplinaId);
+    }
+    setModal(null); setDiscToDelete(null); setDiscDeleteStep(1);
+  }, [discToDelete, atividades, deleteAtividade, deleteDisciplina]);
+
   const urgentCount = useMemo(() => items.filter(it => it.daysRemaining != null && it.daysRemaining >= 0 && it.daysRemaining <= 3 && it.pontuacao == null).length, [items]);
 
   if (authLoading) return <div className="min-h-screen flex items-center justify-center" style={{ background: "#0a0f1a" }}><p className="text-slate-500 text-sm">Carregando...</p></div>;
@@ -1086,6 +1130,7 @@ export default function App() {
           <div className="flex gap-2 shrink-0">
             <button onClick={() => setModal("import")} className="w-8 h-8 rounded-xl flex items-center justify-center text-sm text-slate-400 hover:text-white transition" style={{ background: "rgba(255,255,255,0.06)" }} title="Importar">📂</button>
             <button onClick={() => setModal("export")} className="w-8 h-8 rounded-xl flex items-center justify-center text-sm text-slate-400 hover:text-white transition" style={{ background: "rgba(255,255,255,0.06)" }} title="Exportar">📥</button>
+            <button onClick={() => setModal("config")} className="w-8 h-8 rounded-xl flex items-center justify-center text-sm text-slate-400 hover:text-white transition" style={{ background: "rgba(255,255,255,0.06)" }} title="Configurações">⚙️</button>
             <button onClick={signOut} className="w-8 h-8 rounded-xl flex items-center justify-center text-sm text-slate-400 hover:text-white transition" style={{ background: "rgba(255,255,255,0.06)" }} title="Sair">🚪</button>
             <div className="relative">
               <button onClick={() => setShowAddMenu(v => !v)} className="px-3 h-8 rounded-xl text-xs font-semibold text-white flex items-center gap-1" style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}>+ Novo</button>
@@ -1122,7 +1167,7 @@ export default function App() {
       ) : (
         <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-6 px-safe" style={{ paddingBottom: "calc(80px + var(--sab, 0px))" }}>
           {tab === "dashboard"   && <DashboardTab   items={items} stats={stats} meta={meta} />}
-          {tab === "disciplines" && <DisciplineTab  items={items} stats={stats} meta={meta} onEditItem={handleEdit} onDeleteItem={handleDelete} onQuickGrade={handleQuickGrade} />}
+          {tab === "disciplines" && <DisciplineTab  items={items} stats={stats} meta={meta} onEditItem={handleEdit} onDeleteItem={handleDelete} onQuickGrade={handleQuickGrade} onDeleteDisciplina={handleDeleteDisciplina} />}
           {tab === "plano"       && <PlanejamentoTab stats={stats} meta={meta} onChangeMeta={handleChangeMeta} />}
           {tab === "alerts"      && <AlertsTab      items={items} stats={stats} meta={meta} />}
           {tab === "calendar"    && <CalendarTab    items={items} />}
@@ -1162,6 +1207,25 @@ export default function App() {
       <Modal open={modal === "export"} onClose={() => setModal(null)} title="📥 Exportar Planilha">
         <ExportPanel items={atividades} onClose={() => setModal(null)} />
       </Modal>
+      <Modal open={modal === "config"} onClose={() => setModal(null)} title="⚙️ Configurações">
+        <div className="flex flex-col gap-5">
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-widest font-semibold mb-1">Escala da interface</p>
+            <p className="text-xs text-slate-600 mb-3">Ajuste o tamanho de tudo no app. Substitui o zoom com os dedos.</p>
+            <div className="flex gap-2">
+              {[{ label: "Pequeno", v: 0.9 }, { label: "Médio", v: 1 }, { label: "Grande", v: 1.15 }].map(opt => (
+                <button key={opt.v} onClick={() => aplicarEscala(opt.v)} className={`flex-1 py-3 rounded-xl text-sm font-semibold transition border ${Math.abs(escala - opt.v) < 0.01 ? "text-white border-indigo-500" : "text-slate-400 border-white/10"}`} style={Math.abs(escala - opt.v) < 0.01 ? { background: "linear-gradient(135deg,#6366f1,#8b5cf6)" } : { background: "rgba(255,255,255,0.04)" }}>{opt.label}</button>
+              ))}
+            </div>
+            <div className="mt-3 flex items-center gap-3">
+              <span className="text-xs text-slate-500 shrink-0">Personalizada:</span>
+              <input type="range" min="0.8" max="1.4" step="0.05" value={escala} onChange={e => aplicarEscala(parseFloat(e.target.value))} className="flex-1" style={{ accentColor: "#6366f1" }} />
+              <span className="text-xs text-slate-400 shrink-0 w-10 text-right">{Math.round(escala * 100)}%</span>
+            </div>
+          </div>
+          <button onClick={() => setModal(null)} className="w-full py-3 rounded-xl text-sm font-semibold text-white" style={{ background: "rgba(255,255,255,0.08)" }}>Fechar</button>
+        </div>
+      </Modal>
       <Modal open={modal === "delete"} onClose={() => setModal(null)} title="Excluir Atividade">
         <div className="flex flex-col gap-4">
           <p className="text-sm text-slate-400">Tem certeza que deseja excluir esta atividade? Esta ação não pode ser desfeita.</p>
@@ -1170,6 +1234,35 @@ export default function App() {
             <button onClick={confirmDelete} className="flex-1 py-3 rounded-xl text-sm font-semibold text-white" style={{ background: "linear-gradient(135deg,#ef4444,#dc2626)" }}>Excluir</button>
           </div>
         </div>
+      </Modal>
+      <Modal open={modal === "deletedisc" && !!discToDelete} onClose={() => { setModal(null); setDiscToDelete(null); setDiscDeleteStep(1); }} title="Excluir Disciplina">
+        {discToDelete && (
+          <div className="flex flex-col gap-4">
+            {discDeleteStep === 1 ? (
+              <>
+                <div className="rounded-xl p-4 border border-red-500/30" style={{ background: "rgba(239,68,68,0.08)" }}>
+                  <p className="text-sm text-white font-semibold mb-1">⚠️ Excluir "{discToDelete.disciplina}"?</p>
+                  <p className="text-xs text-slate-400">Isto vai excluir a disciplina <strong>e todas as {discToDelete.items.length} atividade(s)/evento(s)</strong> dentro dela. Esta ação não pode ser desfeita.</p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => { setModal(null); setDiscToDelete(null); }} className="flex-1 py-3 rounded-xl text-sm font-semibold text-slate-400 border border-white/10">Cancelar</button>
+                  <button onClick={() => setDiscDeleteStep(2)} className="flex-1 py-3 rounded-xl text-sm font-semibold text-white" style={{ background: "linear-gradient(135deg,#f59e0b,#d97706)" }}>Continuar</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="rounded-xl p-4 border border-red-500/40" style={{ background: "rgba(239,68,68,0.12)" }}>
+                  <p className="text-sm text-red-300 font-semibold mb-1">Confirmação final</p>
+                  <p className="text-xs text-slate-400">Tem <strong>certeza absoluta</strong>? Toque em "Excluir Definitivamente" para apagar "{discToDelete.disciplina}" e tudo dentro dela.</p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => { setModal(null); setDiscToDelete(null); setDiscDeleteStep(1); }} className="flex-1 py-3 rounded-xl text-sm font-semibold text-slate-400 border border-white/10">Cancelar</button>
+                  <button onClick={confirmDeleteDisciplina} className="flex-1 py-3 rounded-xl text-sm font-semibold text-white" style={{ background: "linear-gradient(135deg,#ef4444,#dc2626)" }}>Excluir Definitivamente</button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </Modal>
     </div>
   );
