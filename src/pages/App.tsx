@@ -469,11 +469,18 @@ function DisciplineTab({ items, stats, meta, onEditItem, onDeleteItem, onQuickGr
     <div className="flex flex-col gap-4">
       <button onClick={() => setSelected(null)} className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition"><span>←</span> Todas as disciplinas</button>
       <div className="rounded-2xl p-5 border border-white/5" style={{ background: "rgba(255,255,255,0.04)" }}>
-        <div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg" style={{ background: `${disc.color}22` }}>📖</div><div><h2 className="text-lg font-bold text-white">{disc.disciplina}</h2><p className="text-xs text-slate-500">{disc.items.length} instrumentos</p></div></div>
+        <div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg" style={{ background: `${disc.color}22` }}>📖</div><div className="min-w-0"><h2 className="text-lg font-bold text-white truncate">{disc.disciplina}</h2><p className="text-xs text-slate-500">{disc.items.length} {disc.items.length === 1 ? "item" : "itens"} · {disc.tipoDisciplina}</p></div></div>
+        {disc.observacoes && <div className="mb-4 p-3 rounded-xl border border-white/5" style={{ background: "rgba(255,255,255,0.03)" }}><p className="text-xs text-slate-400"><span className="text-slate-600">Observações: </span>{disc.observacoes}</p></div>}
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div className="rounded-xl p-3 border border-white/5" style={{ background: "rgba(255,255,255,0.04)" }}><p className="text-xs text-slate-500 mb-1">Média Atual</p><p className="text-2xl font-bold" style={{ color: disc.color }}>{disc.mediaAtual?.toFixed(2) ?? "—"}</p></div>
           <div className="rounded-xl p-3 border border-white/5" style={{ background: "rgba(255,255,255,0.04)" }}><p className="text-xs text-slate-500 mb-1">Nota Necessária</p><p className="text-2xl font-bold" style={{ color: disc.aprovacaoImpossivel ? "#ef4444" : disc.notaNecessaria == null ? "#64748b" : (disc.notaNecessaria > meta ? "#f59e0b" : "#10b981") }}>{disc.aprovacaoImpossivel ? "Impossível" : disc.notaNecessaria != null ? disc.notaNecessaria.toFixed(2) : "—"}</p></div>
         </div>
+        {disc.tipoDisciplina === "Mista" && (
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="rounded-xl p-3 border border-indigo-500/20" style={{ background: "rgba(99,102,241,0.06)" }}><p className="text-xs text-slate-500 mb-1">Parte Teórica ({disc.pesoParteTeorica.toFixed(0)}%)</p><p className="text-xl font-bold text-indigo-300">{disc.mediaTeorica != null ? disc.mediaTeorica.toFixed(2) : "—"}</p></div>
+            <div className="rounded-xl p-3 border border-cyan-500/20" style={{ background: "rgba(6,182,212,0.06)" }}><p className="text-xs text-slate-500 mb-1">Parte Prática ({disc.pesoPartePratica.toFixed(0)}%)</p><p className="text-xl font-bold text-cyan-300">{disc.mediaPratica != null ? disc.mediaPratica.toFixed(2) : "—"}</p></div>
+          </div>
+        )}
         <div className="mb-2"><div className="flex items-center justify-between mb-1"><span className="text-xs text-slate-500">Progresso concluído</span><span className="text-xs text-slate-400">{disc.pesoConcluido.toFixed(1)}%</span></div><ProgressBar value={disc.pesoConcluido} max={100} color={disc.color} height={6} /></div>
         {disc.notaNecessaria != null && <div className="mt-3 p-3 rounded-xl border" style={{ background: "rgba(99,102,241,0.08)", borderColor: "rgba(99,102,241,0.2)" }}><p className="text-xs text-indigo-300">{disc.aprovacaoGarantida ? `✅ Média ${meta} já garantida!` : disc.aprovacaoImpossivel ? `❌ Média ${meta} não é mais matematicamente possível.` : `📌 Você precisa de média ${disc.notaNecessaria.toFixed(2)} nas próximas avaliações para fechar com ${meta}.`}</p></div>}
       </div>

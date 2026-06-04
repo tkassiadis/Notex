@@ -75,6 +75,11 @@ export interface DisciplinaStats {
   notaMaxima: number | null;           // nota máxima alcançável
   aprovacaoGarantida: boolean;         // meta já garantida matematicamente
   aprovacaoImpossivel: boolean;        // impossível atingir a meta
+  // Para disciplinas MISTAS: média de cada parte (null se não houver notas)
+  mediaTeorica: number | null;
+  mediaPratica: number | null;
+  pesoParteTeorica: number;            // % da parte teórica no total
+  pesoPartePratica: number;            // % da parte prática no total
   statusCounts: {
     "Não iniciado": number;
     "Em andamento": number;
