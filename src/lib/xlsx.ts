@@ -94,6 +94,8 @@ export async function parseXlsxFile(file: File): Promise<Atividade[]> {
       return {
         id: `import-${Date.now()}-${i}`, // temporário, substituído pelo UUID do banco
         tipo: "avaliacao",
+        disciplinaId: null,
+        parte: "unica",
         avaliacao: String(r[1] || "").trim(),
         instrumento: String(r[2] || "").trim(),
         disciplina: String(r[3] || "").trim(),

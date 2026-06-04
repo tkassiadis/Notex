@@ -8,6 +8,8 @@ export interface Atividade {
   avaliacao: string;
   instrumento: string;
   disciplina: string;
+  disciplinaId: string | null;   // FK para a tabela disciplinas
+  parte: ParteDisciplina;        // "unica" | "teorica" | "pratica" (para mistas)
   subdivisao: string;
   status: StatusOption;
   data: string;
@@ -16,6 +18,33 @@ export interface Atividade {
   pontuacaoMaxima: number | null;
   pontuacao: number | null;
   observacoes: string;
+}
+
+export type ParteDisciplina = "unica" | "teorica" | "pratica";
+
+export type TipoDisciplina = "Teórica" | "Prática" | "Mista";
+
+export interface Disciplina {
+  id: string;
+  nome: string;
+  tipo: TipoDisciplina;
+  observacoes: string;
+  pesoTeorica: number;           // % da parte teórica no total (mistas)
+  pesoPratica: number;           // % da parte prática no total (mistas)
+  subdivisoes: string[];         // lista de nomes de subdivisões
+}
+
+export interface DisciplinaRow {
+  id: string;
+  user_id: string;
+  nome: string;
+  tipo: string;
+  observacoes: string;
+  peso_teorica: number;
+  peso_pratica: number;
+  subdivisoes: string[] | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface AtividadeEnriquecida extends Atividade {
@@ -35,14 +64,17 @@ export type AvaliacaoOption = "AP1" | "AP2" | "AS" | "AF" | "Evento";
 
 export interface DisciplinaStats {
   disciplina: string;
+  disciplinaId: string | null;         // referência à entidade Disciplina
+  tipoDisciplina: TipoDisciplina;      // Teórica | Prática | Mista
+  observacoes: string;                 // observações da disciplina (persistentes)
   items: AtividadeEnriquecida[];
   mediaAtual: number | null;
   pesoConcluido: number;
   pesoRestante: number;
   notaNecessaria: number | null;
-  notaMaxima: number | null;           // NOVO: nota máxima alcançável
-  aprovacaoGarantida: boolean;         // NOVO: meta já garantida matematicamente
-  aprovacaoImpossivel: boolean;        // NOVO: impossível atingir a meta
+  notaMaxima: number | null;           // nota máxima alcançável
+  aprovacaoGarantida: boolean;         // meta já garantida matematicamente
+  aprovacaoImpossivel: boolean;        // impossível atingir a meta
   statusCounts: {
     "Não iniciado": number;
     "Em andamento": number;
@@ -70,6 +102,8 @@ export interface AtividadeRow {
   avaliacao: string;
   instrumento: string;
   disciplina: string;
+  disciplina_id: string | null;
+  parte: string;
   subdivisao: string;
   status: string;
   data: string | null;

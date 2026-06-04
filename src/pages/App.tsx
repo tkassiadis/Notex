@@ -10,6 +10,7 @@ import * as XLSX from "xlsx";
 import { useAuth } from "../hooks/useAuth";
 import { useAtividades } from "../hooks/useAtividades";
 import { useProfile } from "../hooks/useProfile";
+import { useDisciplinas } from "../hooks/useDisciplinas";
 import { enrichItem, getDisciplineStats, calcNota, calcDaysRemaining } from "../lib/calculos";
 import { exportToExcel, parseXlsxFile } from "../lib/xlsx";
 import { Login } from "./Login";
@@ -179,7 +180,7 @@ function ItemForm({ item, onSave, onClose, disciplines, tipoInicial }: {
   const [newDiscName, setNewDiscName] = useState(isEditing && !itemDiscExists ? (item?.disciplina || "") : "");
   const [tipo, setTipo] = useState<"avaliacao" | "evento">(item?.tipo === "evento" ? "evento" : (tipoInicial || "avaliacao"));
   const [form, setForm] = useState<any>(() => {
-    const base: any = item || { avaliacao: "AP1", instrumento: "", disciplina: disciplines[0] || "", subdivisao: "", status: "Não iniciado", data: "", pesoAvaliacao: 0.2, pesoInstrumento: 1.0, pontuacaoMaxima: null, pontuacao: null, observacoes: "" };
+    const base: any = item || { avaliacao: "AP1", instrumento: "", disciplina: disciplines[0] || "", disciplinaId: null, parte: "unica", subdivisao: "", status: "Não iniciado", data: "", pesoAvaliacao: 0.2, pesoInstrumento: 1.0, pontuacaoMaxima: null, pontuacao: null, observacoes: "" };
     return { ...base, _pa: toStr(base.pesoAvaliacao), _pi: toStr(base.pesoInstrumento), _pm: toStr(base.pontuacaoMaxima), _p: toStr(base.pontuacao) };
   });
   const [errors, setErrors] = useState<any>({});
@@ -825,6 +826,8 @@ function NovaDisciplinaForm({ onSaveBatch, onClose }: {
           avaliacao: a.tipo,
           instrumento: a.nome.trim(),
           disciplina: nome.trim(),
+          disciplinaId: null,
+          parte: "unica" as const,
           subdivisao: a.subdivisao || "",
           status: "Não iniciado" as const,
           data: a.data || "",
@@ -918,6 +921,7 @@ export default function App() {
   const { user, loading: authLoading, signIn, signUp, signOut } = useAuth();
   const { atividades, loading: dataLoading, error, addAtividade, updateAtividade, deleteAtividade, importAtividades } = useAtividades(user);
   const { profile, updateMeta } = useProfile(user);
+  const { disciplinas, addDisciplina } = useDisciplinas(user);
 
   const [tab, setTab] = useState("dashboard");
   const [modal, setModal] = useState<string | null>(null);
@@ -935,8 +939,12 @@ export default function App() {
   }, [updateMeta]);
 
   const items = useMemo(() => atividades.map(enrichItem), [atividades]);
-  const stats = useMemo(() => getDisciplineStats(items, meta), [items, meta]);
-  const disciplines = useMemo<string[]>(() => Array.from(new Set(items.map(it => it.disciplina))), [items]);
+  const stats = useMemo(() => getDisciplineStats(items, meta, disciplinas), [items, meta, disciplinas]);
+  const disciplines = useMemo<string[]>(() => {
+    const nomes = new Set<string>(items.map(it => it.disciplina));
+    disciplinas.forEach(d => nomes.add(d.nome));
+    return Array.from(nomes).filter(Boolean);
+  }, [items, disciplinas]);
 
   const handleSave = useCallback(async (form: Omit<Atividade, "id">) => {
     // Erros sobem para o ItemForm (que libera o botão); modal só fecha no sucesso

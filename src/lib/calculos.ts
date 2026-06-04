@@ -2,7 +2,7 @@
 // src/lib/calculos.ts
 // ============================================================
 
-import type { Atividade, AtividadeEnriquecida, DisciplinaStats } from "../types";
+import type { Atividade, AtividadeEnriquecida, DisciplinaStats, Disciplina } from "../types";
 
 const DISC_COLORS = [
   "#6366f1", "#8b5cf6", "#ec4899", "#f43f5e",
@@ -30,12 +30,22 @@ export function enrichItem(item: Atividade): AtividadeEnriquecida {
 
 export function getDisciplineStats(
   items: AtividadeEnriquecida[],
-  meta: number = 7
+  meta: number = 7,
+  disciplinas: Disciplina[] = []
 ): DisciplinaStats[] {
+  // Mapa nome → metadados da disciplina (tipo, observações, id)
+  const metaByName: Record<string, Disciplina> = {};
+  disciplinas.forEach((d) => { metaByName[d.nome] = d; });
+
+  // Agrupa por nome de disciplina. Inclui também disciplinas SEM atividades.
   const byDisc: Record<string, AtividadeEnriquecida[]> = {};
   items.forEach((it) => {
     if (!byDisc[it.disciplina]) byDisc[it.disciplina] = [];
     byDisc[it.disciplina].push(it);
+  });
+  // Garante que disciplinas cadastradas mas ainda sem atividades apareçam
+  disciplinas.forEach((d) => {
+    if (!byDisc[d.nome]) byDisc[d.nome] = [];
   });
 
   return Object.entries(byDisc).map(([disc, rows], idx) => {
@@ -75,6 +85,9 @@ export function getDisciplineStats(
 
     return {
       disciplina: disc,
+      disciplinaId: metaByName[disc]?.id ?? null,
+      tipoDisciplina: metaByName[disc]?.tipo ?? "Teórica",
+      observacoes: metaByName[disc]?.observacoes ?? "",
       items: rows,        // lista completa (avaliações + eventos) para UI/calendário/alertas
       mediaAtual:    mediaAtual != null ? Math.round(mediaAtual * 100) / 100 : null,
       pesoConcluido: Math.round(pesoConcluido * 1000) / 10,
