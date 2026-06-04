@@ -38,10 +38,12 @@ html, body, #root {
   padding-top: var(--sat);
 }
 
-/* ── Safe areas laterais (notch em landscape, bordas curvas) ── */
+/* ── Safe areas laterais + respiro mínimo garantido ──
+   Em iPhones em retrato a safe-area lateral costuma ser 0, deixando o
+   conteúdo colado nas bordas. Garantimos um respiro mínimo de 18px. */
 .px-safe {
-  padding-left: var(--sal);
-  padding-right: var(--sar);
+  padding-left: calc(18px + var(--sal)) !important;
+  padding-right: calc(18px + var(--sar)) !important;
 }
 
 /* Header fixo: cobre o topo incluindo a safe area do notch */

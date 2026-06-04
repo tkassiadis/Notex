@@ -621,12 +621,47 @@ function CalendarTab({ items }: { items: AtividadeEnriquecida[] }) {
 }
 
 // ─── PLANEJAMENTO TAB ─────────────────────────────────────────
+// Input de pontuação simulada (texto livre + slider até a máxima) para a Simulação
+function SimScoreInput({ item, value, onChange }: { item: any; value: number | undefined; onChange: (v: number) => void }) {
+  const max = item.pontuacaoMaxima && item.pontuacaoMaxima > 0 ? item.pontuacaoMaxima : 10;
+  const toStr = (v: number) => (v % 1 === 0 ? String(v) : String(v).replace(".", ","));
+  const atual = value ?? Math.round(max * 0.75 * 100) / 100;
+  const [txt, setTxt] = useState<string>(toStr(atual));
+  const step = max <= 10 ? 0.05 : max <= 100 ? 0.5 : 1;
+  const setBoth = (n: number) => { const c = Math.max(0, Math.min(max, n)); onChange(c); setTxt(toStr(Math.round(c * 100) / 100)); };
+  const onTxt = (s: string) => { setTxt(s); const n = parseDecimal(s); if (n != null) onChange(Math.max(0, Math.min(max, n))); };
+  const nota10 = (atual / max) * 10;
+  return (
+    <div className="mb-3 pl-4">
+      <div className="flex items-center justify-between mb-1 gap-2">
+        <span className="text-xs text-slate-400 truncate pr-1">{item.instrumento}</span>
+        <div className="flex items-center gap-2 shrink-0">
+          <input type="text" inputMode="decimal" value={txt} onChange={e => onTxt(e.target.value)} className="w-16 rounded-lg px-2 py-1 text-xs text-white border border-white/10 outline-none focus:border-indigo-500 text-right" style={{ background: "rgba(255,255,255,0.06)" }} />
+          <span className="text-xs text-slate-600">/{toStr(max)}</span>
+          <span className="text-xs font-bold text-indigo-400 w-10 text-right">{nota10.toFixed(1)}/10</span>
+        </div>
+      </div>
+      <input type="range" min="0" max={max} step={step} value={atual} onChange={e => setBoth(parseFloat(e.target.value))} className="w-full" style={{ accentColor: "#6366f1" }} />
+      <div className="flex justify-between text-xs text-slate-700 mt-0.5"><span>0</span><span>{toStr(Math.round(max/2*100)/100)}</span><span>{toStr(max)}</span></div>
+    </div>
+  );
+}
+
 function projetarMedia(s: DisciplinaStats, mult: number | null, customScores: Record<string, number> = {}): number | null {
   let ws = 0, tw = 0;
   s.items.forEach((r: any) => {
+    if (r.tipo === "evento") return;            // eventos não entram
     const w = r.pesoAvaliacao * r.pesoInstrumento; tw += w;
     let n = calcNota(r.pontuacao, r.pontuacaoMaxima);
-    if (n == null) n = customScores[r.id] != null ? customScores[r.id] : (mult != null ? 10 * mult : 7.5);
+    if (n == null) {
+      if (customScores[r.id] != null) {
+        // customScores guarda PONTUAÇÃO simulada → converte para nota (0-10)
+        const maxR = r.pontuacaoMaxima && r.pontuacaoMaxima > 0 ? r.pontuacaoMaxima : 10;
+        n = (customScores[r.id] / maxR) * 10;
+      } else {
+        n = mult != null ? 10 * mult : 7.5;
+      }
+    }
     if (n != null) ws += n * w;
   });
   return tw > 0 ? Math.round((ws / tw) * 100) / 100 : null;
@@ -701,8 +736,8 @@ function PlanejamentoTab({ stats, meta, onChangeMeta }: { stats: DisciplinaStats
         <div className="grid grid-cols-2 gap-2 p-4 pb-0">{CENARIO_OPTS.map(c => <button key={c.id} onClick={() => setCenario(c.id)} className="rounded-xl p-3 text-left border transition" style={{ background: cenario === c.id ? `${c.color}15` : "rgba(255,255,255,0.03)", borderColor: cenario === c.id ? c.color + "44" : "rgba(255,255,255,0.08)" }}><div className="flex items-center gap-1.5 mb-1"><span className="text-sm">{c.icon}</span><span className="text-xs font-bold text-white">{c.label}</span></div><p className="text-xs" style={{ color: c.color }}>{c.desc}</p></button>)}</div>
         {cenario === "custom" && (
           <div className="px-4 pt-4 pb-2 flex flex-col gap-3">
-            <p className="text-xs text-slate-500">Arraste para definir a nota esperada em cada avaliação pendente:</p>
-            {discStats.map(s => { const pending = s.items.filter((r: any) => r.pontuacao == null); if (pending.length === 0) return null; return (<div key={s.disciplina}><div className="flex items-center gap-2 mb-2"><div className="w-2 h-2 rounded-full" style={{ background: s.color }} /><span className="text-xs font-bold text-white">{s.disciplina}</span></div>{pending.map((it: any) => (<div key={it.id} className="mb-3 pl-4"><div className="flex items-center justify-between mb-1"><span className="text-xs text-slate-400 truncate pr-2">{it.instrumento}</span><span className="text-xs font-bold text-indigo-400 shrink-0">{(simScores[it.id] ?? 7.5).toFixed(1)}</span></div><input type="range" min="0" max="10" step="0.5" value={simScores[it.id] ?? 7.5} onChange={e => setSimScores(sc => ({ ...sc, [it.id]: parseFloat(e.target.value) }))} className="w-full" /><div className="flex justify-between text-xs text-slate-700 mt-0.5"><span>0</span><span>5</span><span>10</span></div></div>))}</div>); })}
+            <p className="text-xs text-slate-500">Defina a pontuação esperada em cada avaliação pendente (digite ou arraste):</p>
+            {discStats.map(s => { const pending = s.items.filter((r: any) => r.pontuacao == null && r.tipo !== "evento"); if (pending.length === 0) return null; return (<div key={s.disciplina}><div className="flex items-center gap-2 mb-2"><div className="w-2 h-2 rounded-full" style={{ background: s.color }} /><span className="text-xs font-bold text-white">{s.disciplina}</span></div>{pending.map((it: any) => (<SimScoreInput key={it.id} item={it} value={simScores[it.id]} onChange={(v) => setSimScores(sc => ({ ...sc, [it.id]: v }))} />))}</div>); })}
           </div>
         )}
         <div className="px-4 py-4 flex flex-col gap-2">
