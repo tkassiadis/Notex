@@ -474,14 +474,14 @@ function DashboardTab({ items, stats, meta }: { items: AtividadeEnriquecida[]; s
 }
 
 // ─── DISCIPLINE TAB ───────────────────────────────────────────
-function DisciplineTab({ items, stats, meta, onEditItem, onDeleteItem, onQuickGrade, onDeleteDisciplina }: { items: AtividadeEnriquecida[]; stats: DisciplinaStats[]; meta: number; onEditItem: (item: Atividade) => void; onDeleteItem: (id: string) => void; onQuickGrade?: (item: Atividade) => void; onDeleteDisciplina?: (d: DisciplinaStats) => void }) {
+function DisciplineTab({ items, stats, meta, onEditItem, onDeleteItem, onQuickGrade, onDeleteDisciplina, onEditDisciplina }: { items: AtividadeEnriquecida[]; stats: DisciplinaStats[]; meta: number; onEditItem: (item: Atividade) => void; onDeleteItem: (id: string) => void; onQuickGrade?: (item: Atividade) => void; onDeleteDisciplina?: (d: DisciplinaStats) => void; onEditDisciplina?: (d: DisciplinaStats) => void }) {
   const [selected, setSelected] = useState<string | null>(null);
   const disc = selected ? stats.find(s => s.disciplina === selected) : null;
   if (disc) return (
     <div className="flex flex-col gap-4">
       <button onClick={() => setSelected(null)} className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition"><span>←</span> Todas as disciplinas</button>
       <div className="rounded-2xl p-5 border border-white/5" style={{ background: "rgba(255,255,255,0.04)" }}>
-        <div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg" style={{ background: `${disc.color}22` }}>📖</div><div className="min-w-0 flex-1"><h2 className="text-lg font-bold text-white truncate">{disc.disciplina}</h2><p className="text-xs text-slate-500">{disc.items.length} {disc.items.length === 1 ? "item" : "itens"} · {disc.tipoDisciplina}</p></div>{onDeleteDisciplina && disc.disciplinaId && <button onClick={() => onDeleteDisciplina(disc)} className="w-8 h-8 rounded-lg flex items-center justify-center text-sm text-red-400 hover:text-red-300 transition shrink-0" style={{ background: "rgba(239,68,68,0.1)" }} title="Excluir disciplina">🗑</button>}</div>
+        <div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg" style={{ background: `${disc.color}22` }}>📖</div><div className="min-w-0 flex-1"><h2 className="text-lg font-bold text-white truncate">{disc.disciplina}</h2><p className="text-xs text-slate-500">{disc.items.length} {disc.items.length === 1 ? "item" : "itens"} · {disc.tipoDisciplina}</p></div><div className="flex gap-1.5 shrink-0">{onEditDisciplina && disc.disciplinaId && <button onClick={() => onEditDisciplina(disc)} className="w-8 h-8 rounded-lg flex items-center justify-center text-sm text-slate-300 hover:text-white transition" style={{ background: "rgba(255,255,255,0.08)" }} title="Editar disciplina">✏️</button>}{onDeleteDisciplina && disc.disciplinaId && <button onClick={() => onDeleteDisciplina(disc)} className="w-8 h-8 rounded-lg flex items-center justify-center text-sm text-red-400 hover:text-red-300 transition" style={{ background: "rgba(239,68,68,0.1)" }} title="Excluir disciplina">🗑</button>}</div></div>
         {disc.observacoes && <div className="mb-4 p-3 rounded-xl border border-white/5" style={{ background: "rgba(255,255,255,0.03)" }}><p className="text-xs text-slate-400"><span className="text-slate-600">Observações: </span>{disc.observacoes}</p></div>}
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div className="rounded-xl p-3 border border-white/5" style={{ background: "rgba(255,255,255,0.04)" }}><p className="text-xs text-slate-500 mb-1">Média Atual</p><p className="text-2xl font-bold" style={{ color: disc.color }}>{disc.mediaAtual?.toFixed(2) ?? "—"}</p></div>
@@ -873,22 +873,43 @@ function QuickGradePanel({ item, stats, meta, onSave, onClose }: {
 const TIPO_DISCIPLINA = ["Teórica", "Prática", "Mista"];
 const TIPO_AVALIACAO_LOTE = ["AP1", "AP2", "AS", "AF", "Seminário", "Projeto", "Avaliação Prática", "Avaliação Teórica"];
 
-// Nova Disciplina (Fase D): cria a entidade Disciplina de verdade.
+// Nova Disciplina: cria/edita a entidade Disciplina de verdade.
 // Avaliações são OPCIONAIS — pode salvar disciplina vazia e lançar depois.
-function NovaDisciplinaForm({ onSaveDisciplina, onClose }: {
+// Em modo edição, recebe a disciplina e suas avaliações existentes.
+function NovaDisciplinaForm({ onSaveDisciplina, onClose, editDisc, editAvaliacoes }: {
   onSaveDisciplina: (
-    disc: { nome: string; tipo: TipoDisciplina; observacoes: string; pesoTeorica: number; pesoPratica: number; subdivisoes: string[] },
-    avaliacoes: { avaliacao: string; instrumento: string; parte: ParteDisciplina; subdivisao: string; data: string; pesoAvaliacao: number; pesoInstrumento: number; pontuacaoMaxima: number | null; observacoes: string }[]
+    disc: { nome: string; tipo: TipoDisciplina; observacoes: string; pesoTeorica: number; pesoPratica: number; subdivisoes: string[]; id?: string },
+    avaliacoes: { id?: string; avaliacao: string; instrumento: string; parte: ParteDisciplina; subdivisao: string; data: string; pesoAvaliacao: number; pesoInstrumento: number; pontuacaoMaxima: number | null; pontuacao: number | null; observacoes: string }[],
+    removidas: string[]
   ) => void | Promise<void>;
   onClose: () => void;
+  editDisc?: Disciplina | null;
+  editAvaliacoes?: Atividade[];
 }) {
-  const [nome, setNome] = useState("");
-  const [tipoDisc, setTipoDisc] = useState<TipoDisciplina>("Teórica");
-  const [obsDisc, setObsDisc] = useState("");
-  const [pesoTeorica, setPesoTeorica] = useState("60");   // só usado em Mista
-  const [subdivisoes, setSubdivisoes] = useState<string[]>([]);
+  const isEdit = !!editDisc;
+  const toStr = (v: any) => (v == null ? "" : String(v).replace(".", ","));
+  const [nome, setNome] = useState(editDisc?.nome || "");
+  const [tipoDisc, setTipoDisc] = useState<TipoDisciplina>(editDisc?.tipo || "Teórica");
+  const [obsDisc, setObsDisc] = useState(editDisc?.observacoes || "");
+  const [pesoTeorica, setPesoTeorica] = useState(editDisc ? String(editDisc.pesoTeorica) : "60");
+  const [subdivisoes, setSubdivisoes] = useState<string[]>(editDisc?.subdivisoes || []);
   const [novaSub, setNovaSub] = useState("");
-  const [avaliacoes, setAvaliacoes] = useState<any[]>([]);
+  // Avaliações: em edição, carrega as existentes (com id e pontuação)
+  const [avaliacoes, setAvaliacoes] = useState<any[]>(() => {
+    if (editAvaliacoes && editAvaliacoes.length > 0) {
+      return editAvaliacoes.filter(a => a.tipo !== "evento").map(a => ({
+        _id: a.id, id: a.id, nome: a.instrumento, tipo: a.avaliacao,
+        parte: a.parte === "pratica" ? "pratica" : "teorica",
+        subdivisao: a.subdivisao || "", data: a.data || "",
+        peso: toStr(Math.round(a.pesoAvaliacao * 100)),
+        pesoInstrumento: toStr(Math.round(a.pesoInstrumento * 100)),
+        pontuacaoMaxima: toStr(a.pontuacaoMaxima), pontuacao: toStr(a.pontuacao),
+        observacoes: a.observacoes || "",
+      }));
+    }
+    return [];
+  });
+  const [removidas, setRemovidas] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -896,18 +917,13 @@ function NovaDisciplinaForm({ onSaveDisciplina, onClose }: {
   const pTeorica = parseDecimal(pesoTeorica) ?? 0;
   const pPratica = 100 - pTeorica;
 
-  const addAvaliacao = (parte: ParteDisciplina) => setAvaliacoes(a => [...a, { _id: Date.now() + Math.random(), nome: "", tipo: "AP1", parte, subdivisao: "", data: "", peso: "", pesoInstrumento: "100", pontuacaoMaxima: "10", observacoes: "" }]);
-  const removeAvaliacao = (id: number) => setAvaliacoes(a => a.filter(x => x._id !== id));
-  const setAv = (id: number, k: string, v: any) => setAvaliacoes(a => a.map(x => x._id === id ? { ...x, [k]: v } : x));
+  const addAvaliacao = (parte: ParteDisciplina) => setAvaliacoes(a => [...a, { _id: "new-" + Date.now() + Math.random(), nome: "", tipo: "AP1", parte, subdivisao: "", data: "", peso: "", pesoInstrumento: "100", pontuacaoMaxima: "10", pontuacao: "", observacoes: "" }]);
+  const removeAvaliacao = (id: any) => { setAvaliacoes(a => a.filter(x => x._id !== id)); const av = avaliacoes.find(x => x._id === id); if (av?.id) setRemovidas(r => [...r, av.id]); };
+  const setAv = (id: any, k: string, v: any) => setAvaliacoes(a => a.map(x => x._id === id ? { ...x, [k]: v } : x));
   const addSub = () => { const s = novaSub.trim(); if (s && !subdivisoes.includes(s)) { setSubdivisoes(p => [...p, s]); setNovaSub(""); } };
   const removeSub = (s: string) => { setSubdivisoes(p => p.filter(x => x !== s)); setAvaliacoes(a => a.map(x => x.subdivisao === s ? { ...x, subdivisao: "" } : x)); };
 
-  // Soma de pesos por parte (cada parte deve fechar 100%)
   const somaParte = (parte: ParteDisciplina) => avaliacoes.filter(a => a.parte === parte).reduce((acc, a) => acc + (parseDecimal(a.peso) ?? 0), 0);
-  const somaUnica = somaParte("unica");
-  const somaT = somaParte("teorica");
-  const somaP = somaParte("pratica");
-
   const barColor = (soma: number, tem: boolean) => !tem ? "#64748b" : Math.abs(soma - 100) < 0.01 ? "#10b981" : soma > 100 ? "#ef4444" : "#f59e0b";
 
   const handleSave = async () => {
@@ -918,6 +934,7 @@ function NovaDisciplinaForm({ onSaveDisciplina, onClose }: {
     setSaving(true);
     try {
       const disc = {
+        id: editDisc?.id,
         nome: nome.trim(),
         tipo: tipoDisc,
         observacoes: obsDisc.trim(),
@@ -927,6 +944,7 @@ function NovaDisciplinaForm({ onSaveDisciplina, onClose }: {
       };
       const validas = avaliacoes.filter(a => a.nome.trim());
       const avs = validas.map(a => ({
+        id: a.id,
         avaliacao: a.tipo,
         instrumento: a.nome.trim(),
         parte: (isMista ? a.parte : "unica") as ParteDisciplina,
@@ -935,15 +953,16 @@ function NovaDisciplinaForm({ onSaveDisciplina, onClose }: {
         pesoAvaliacao: (parseDecimal(a.peso) ?? 0) / 100,
         pesoInstrumento: (parseDecimal(a.pesoInstrumento) ?? 100) / 100,
         pontuacaoMaxima: parseDecimal(a.pontuacaoMaxima),
+        pontuacao: parseDecimal(a.pontuacao),
         observacoes: a.observacoes.trim(),
       }));
-      await onSaveDisciplina(disc, avs);
+      await onSaveDisciplina(disc, avs, removidas);
     } finally {
       setSaving(false);
     }
   };
 
-  // Renderiza um grupo de avaliações de uma parte
+  // Mini-form completo de uma avaliação
   const renderAvaliacoes = (parte: ParteDisciplina, label: string) => {
     const lista = avaliacoes.filter(a => a.parte === parte);
     const soma = somaParte(parte);
@@ -963,17 +982,21 @@ function NovaDisciplinaForm({ onSaveDisciplina, onClose }: {
                 <button onClick={() => removeAvaliacao(a._id)} className="text-xs text-red-400">remover</button>
               </div>
               <div className="flex flex-col gap-2">
-                <input value={a.nome} onChange={e => setAv(a._id, "nome", e.target.value)} className={INPUT_CLS} style={INPUT_STY} placeholder="Nome (ex: Prova 1)" />
+                <input value={a.nome} onChange={e => setAv(a._id, "nome", e.target.value)} className={INPUT_CLS} style={INPUT_STY} placeholder="Nome do instrumento (ex: Prova 1)" />
                 <div className="grid grid-cols-2 gap-2">
-                  <select value={a.tipo} onChange={e => setAv(a._id, "tipo", e.target.value)} className={INPUT_CLS} style={INPUT_STY}>{TIPO_AVALIACAO_LOTE.map(t => <option key={t}>{t}</option>)}</select>
+                  <div><label className="text-xs text-slate-500">Avaliação</label><select value={a.tipo} onChange={e => setAv(a._id, "tipo", e.target.value)} className={INPUT_CLS} style={INPUT_STY}>{TIPO_AVALIACAO_LOTE.map(t => <option key={t}>{t}</option>)}</select></div>
                   {subdivisoes.length > 0
-                    ? <select value={a.subdivisao} onChange={e => setAv(a._id, "subdivisao", e.target.value)} className={INPUT_CLS} style={INPUT_STY}><option value="">Sem subdivisão</option>{subdivisoes.map(s => <option key={s}>{s}</option>)}</select>
-                    : <input type="date" value={a.data} onChange={e => setAv(a._id, "data", e.target.value)} className={INPUT_CLS} style={INPUT_STY} />}
+                    ? <div><label className="text-xs text-slate-500">Subdivisão</label><select value={a.subdivisao} onChange={e => setAv(a._id, "subdivisao", e.target.value)} className={INPUT_CLS} style={INPUT_STY}><option value="">Nenhuma</option>{subdivisoes.map(s => <option key={s}>{s}</option>)}</select></div>
+                    : <div><label className="text-xs text-slate-500">Data</label><input type="date" value={a.data} onChange={e => setAv(a._id, "data", e.target.value)} className={INPUT_CLS} style={INPUT_STY} /></div>}
                 </div>
-                {subdivisoes.length > 0 && <input type="date" value={a.data} onChange={e => setAv(a._id, "data", e.target.value)} className={INPUT_CLS} style={INPUT_STY} />}
+                {subdivisoes.length > 0 && <div><label className="text-xs text-slate-500">Data</label><input type="date" value={a.data} onChange={e => setAv(a._id, "data", e.target.value)} className={INPUT_CLS} style={INPUT_STY} /></div>}
                 <div className="grid grid-cols-2 gap-2">
-                  <input type="text" inputMode="decimal" value={a.peso} onChange={e => setAv(a._id, "peso", e.target.value)} className={INPUT_CLS} style={INPUT_STY} placeholder="Peso na parte % (ex: 40)" />
-                  <input type="text" inputMode="decimal" value={a.pontuacaoMaxima} onChange={e => setAv(a._id, "pontuacaoMaxima", e.target.value)} className={INPUT_CLS} style={INPUT_STY} placeholder="Pontuação máx (ex: 10)" />
+                  <div><label className="text-xs text-slate-500">Peso da avaliação %</label><input type="text" inputMode="decimal" value={a.peso} onChange={e => setAv(a._id, "peso", e.target.value)} className={INPUT_CLS} style={INPUT_STY} placeholder="ex: 40" /></div>
+                  <div><label className="text-xs text-slate-500">Peso do instrumento %</label><input type="text" inputMode="decimal" value={a.pesoInstrumento} onChange={e => setAv(a._id, "pesoInstrumento", e.target.value)} className={INPUT_CLS} style={INPUT_STY} placeholder="ex: 100" /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div><label className="text-xs text-slate-500">Pontuação máxima</label><input type="text" inputMode="decimal" value={a.pontuacaoMaxima} onChange={e => setAv(a._id, "pontuacaoMaxima", e.target.value)} className={INPUT_CLS} style={INPUT_STY} placeholder="ex: 10" /></div>
+                  <div><label className="text-xs text-slate-500">Pontuação obtida</label><input type="text" inputMode="decimal" value={a.pontuacao} onChange={e => setAv(a._id, "pontuacao", e.target.value)} className={INPUT_CLS} style={INPUT_STY} placeholder="deixe vazio se não fez" /></div>
                 </div>
                 <input value={a.observacoes} onChange={e => setAv(a._id, "observacoes", e.target.value)} className={INPUT_CLS} style={INPUT_STY} placeholder="Observações (opcional)" />
               </div>
@@ -987,9 +1010,8 @@ function NovaDisciplinaForm({ onSaveDisciplina, onClose }: {
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Dados da disciplina */}
       <div className="flex flex-col gap-3">
-        <FormField label="Nome da disciplina"><input value={nome} onChange={e => setNome(e.target.value)} className={INPUT_CLS} style={INPUT_STY} placeholder="Ex: Clínica Médica" autoFocus /></FormField>
+        <FormField label="Nome da disciplina"><input value={nome} onChange={e => setNome(e.target.value)} className={INPUT_CLS} style={INPUT_STY} placeholder="Ex: Clínica Médica" autoFocus={!isEdit} /></FormField>
         <FormField label="Tipo da disciplina">
           <div className="flex rounded-xl overflow-hidden border border-white/10" style={{ background: "rgba(255,255,255,0.03)" }}>
             {TIPO_DISCIPLINA.map(t => (
@@ -1011,7 +1033,6 @@ function NovaDisciplinaForm({ onSaveDisciplina, onClose }: {
         <FormField label="Observações (opcional)"><textarea value={obsDisc} onChange={e => setObsDisc(e.target.value)} rows={2} className={INPUT_CLS} style={INPUT_STY} placeholder="Anotações sobre a disciplina (ficam salvas)" /></FormField>
       </div>
 
-      {/* Subdivisões */}
       <div className="rounded-2xl p-4 border border-white/5" style={{ background: "rgba(255,255,255,0.03)" }}>
         <p className="text-xs text-slate-500 uppercase tracking-widest font-semibold mb-1">Subdivisões (opcional)</p>
         <p className="text-xs text-slate-600 mb-2">Crie aqui; escolha em cada avaliação.</p>
@@ -1022,23 +1043,22 @@ function NovaDisciplinaForm({ onSaveDisciplina, onClose }: {
         {subdivisoes.length > 0 && <div className="flex flex-wrap gap-2">{subdivisoes.map(s => <span key={s} className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs text-white" style={{ background: "rgba(99,102,241,0.25)" }}>{s}<button onClick={() => removeSub(s)} className="text-slate-400 hover:text-white">✕</button></span>)}</div>}
       </div>
 
-      {/* Avaliações — opcionais */}
       <div>
         <p className="text-xs text-slate-500 uppercase tracking-widest font-semibold mb-1">Avaliações (opcional)</p>
-        <p className="text-xs text-slate-600 mb-3">Você pode salvar a disciplina vazia e lançar avaliações depois.</p>
+        <p className="text-xs text-slate-600 mb-3">Pode salvar a disciplina vazia e lançar depois.</p>
         {isMista ? (
           <div className="flex flex-col gap-3">
             {renderAvaliacoes("teorica", `Parte Teórica (${pTeorica.toFixed(0)}%)`)}
             {renderAvaliacoes("pratica", `Parte Prática (${pPratica.toFixed(0)}%)`)}
           </div>
-        ) : renderAvaliacoes("unica", "Avaliações")}
+        ) : renderAvaliacoes("teorica", "Avaliações")}
       </div>
 
       {erro && <p className="text-xs text-red-400">{erro}</p>}
 
       <div className="flex gap-2">
         <button onClick={onClose} disabled={saving} className="flex-1 py-3 rounded-xl text-sm font-semibold text-slate-400 border border-white/10 disabled:opacity-40">Cancelar</button>
-        <button onClick={handleSave} disabled={saving} className="flex-1 py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-60" style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}>{saving ? "Salvando..." : "Salvar Disciplina"}</button>
+        <button onClick={handleSave} disabled={saving} className="flex-1 py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-60" style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}>{saving ? "Salvando..." : (isEdit ? "Salvar Alterações" : "Salvar Disciplina")}</button>
       </div>
     </div>
   );
@@ -1056,7 +1076,7 @@ export default function App() {
   const { user, loading: authLoading, signIn, signUp, signOut } = useAuth();
   const { atividades, loading: dataLoading, error, addAtividade, updateAtividade, deleteAtividade, importAtividades } = useAtividades(user);
   const { profile, updateMeta } = useProfile(user);
-  const { disciplinas, addDisciplina, deleteDisciplina } = useDisciplinas(user);
+  const { disciplinas, addDisciplina, deleteDisciplina, updateDisciplina } = useDisciplinas(user);
 
   const [tab, setTab] = useState("dashboard");
   const [modal, setModal] = useState<string | null>(null);
@@ -1101,35 +1121,52 @@ export default function App() {
   }, [editingItem, addAtividade, updateAtividade]);
 
   // Salvamento em lote (fluxo Nova Disciplina) — cria todas as avaliações de uma vez
+  const [editingDisc, setEditingDisc] = useState<Disciplina | null>(null);
   const handleSaveDisciplina = useCallback(async (
-    disc: { nome: string; tipo: TipoDisciplina; observacoes: string; pesoTeorica: number; pesoPratica: number; subdivisoes: string[] },
-    avs: { avaliacao: string; instrumento: string; parte: ParteDisciplina; subdivisao: string; data: string; pesoAvaliacao: number; pesoInstrumento: number; pontuacaoMaxima: number | null; observacoes: string }[]
+    disc: { id?: string; nome: string; tipo: TipoDisciplina; observacoes: string; pesoTeorica: number; pesoPratica: number; subdivisoes: string[] },
+    avs: { id?: string; avaliacao: string; instrumento: string; parte: ParteDisciplina; subdivisao: string; data: string; pesoAvaliacao: number; pesoInstrumento: number; pontuacaoMaxima: number | null; pontuacao: number | null; observacoes: string }[],
+    removidas: string[]
   ) => {
-    // 1. Cria a disciplina na tabela
-    const novaDisc = await addDisciplina(disc);
-    // 2. Cria as avaliações ligadas a ela (se houver)
-    if (novaDisc) {
-      for (const a of avs) {
-        await addAtividade({
-          tipo: "avaliacao",
-          avaliacao: a.avaliacao,
-          instrumento: a.instrumento,
-          disciplina: disc.nome,
-          disciplinaId: novaDisc.id,
-          parte: a.parte,
-          subdivisao: a.subdivisao,
-          status: "Não iniciado",
-          data: a.data,
-          pesoAvaliacao: a.pesoAvaliacao,
-          pesoInstrumento: a.pesoInstrumento,
-          pontuacaoMaxima: a.pontuacaoMaxima,
-          pontuacao: null,
-          observacoes: a.observacoes,
-        });
-      }
+    let discId = disc.id;
+    if (disc.id) {
+      // EDIÇÃO: atualiza a disciplina
+      await updateDisciplina(disc.id, { nome: disc.nome, tipo: disc.tipo, observacoes: disc.observacoes, pesoTeorica: disc.pesoTeorica, pesoPratica: disc.pesoPratica, subdivisoes: disc.subdivisoes });
+    } else {
+      // CRIAÇÃO: cria a disciplina
+      const nova = await addDisciplina(disc);
+      discId = nova?.id;
     }
-    setModal(null);
-  }, [addDisciplina, addAtividade]);
+    // Remove avaliações marcadas para exclusão
+    for (const id of removidas) { await deleteAtividade(id); }
+    // Cria ou atualiza as avaliações
+    for (const a of avs) {
+      const status = a.pontuacao != null ? "Finalizado" : "Não iniciado";
+      const payload = {
+        tipo: "avaliacao" as const,
+        avaliacao: a.avaliacao,
+        instrumento: a.instrumento,
+        disciplina: disc.nome,
+        disciplinaId: discId ?? null,
+        parte: a.parte,
+        subdivisao: a.subdivisao,
+        status: status as Atividade["status"],
+        data: a.data,
+        pesoAvaliacao: a.pesoAvaliacao,
+        pesoInstrumento: a.pesoInstrumento,
+        pontuacaoMaxima: a.pontuacaoMaxima,
+        pontuacao: a.pontuacao,
+        observacoes: a.observacoes,
+      };
+      if (a.id) await updateAtividade({ ...payload, id: a.id });
+      else await addAtividade(payload);
+    }
+    setModal(null); setEditingDisc(null);
+  }, [addDisciplina, addAtividade, updateAtividade, updateDisciplina, deleteAtividade]);
+  // Abre o formulário de edição de disciplina
+  const handleEditDisciplina = useCallback((d: DisciplinaStats) => {
+    const full = disciplinas.find(x => x.id === d.disciplinaId);
+    if (full) { setEditingDisc(full); setModal("editdisc"); }
+  }, [disciplinas]);
 
   // Abre o ItemForm já com o tipo certo (avaliação ou evento)
   const openNovaAvaliacao = useCallback(() => { setEditingItem(null); setNovoTipo("avaliacao"); setShowAddMenu(false); setModal("add"); }, []);
@@ -1214,7 +1251,7 @@ export default function App() {
       ) : (
         <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-6 px-safe" style={{ paddingBottom: "calc(80px + var(--sab, 0px))" }}>
           {tab === "dashboard"   && <DashboardTab   items={items} stats={stats} meta={meta} />}
-          {tab === "disciplines" && <DisciplineTab  items={items} stats={stats} meta={meta} onEditItem={handleEdit} onDeleteItem={handleDelete} onQuickGrade={handleQuickGrade} onDeleteDisciplina={handleDeleteDisciplina} />}
+          {tab === "disciplines" && <DisciplineTab  items={items} stats={stats} meta={meta} onEditItem={handleEdit} onDeleteItem={handleDelete} onQuickGrade={handleQuickGrade} onDeleteDisciplina={handleDeleteDisciplina} onEditDisciplina={handleEditDisciplina} />}
           {tab === "plano"       && <PlanejamentoTab stats={stats} meta={meta} onChangeMeta={handleChangeMeta} />}
           {tab === "alerts"      && <AlertsTab      items={items} stats={stats} meta={meta} />}
           {tab === "calendar"    && <CalendarTab    items={items} />}
@@ -1241,6 +1278,9 @@ export default function App() {
 
       <Modal open={modal === "novadisc"} onClose={() => setModal(null)} title="📚 Nova Disciplina">
         <NovaDisciplinaForm onSaveDisciplina={handleSaveDisciplina} onClose={() => setModal(null)} />
+      </Modal>
+      <Modal open={modal === "editdisc" && !!editingDisc} onClose={() => { setModal(null); setEditingDisc(null); }} title="✏️ Editar Disciplina">
+        {editingDisc && <NovaDisciplinaForm onSaveDisciplina={handleSaveDisciplina} onClose={() => { setModal(null); setEditingDisc(null); }} editDisc={editingDisc} editAvaliacoes={atividades.filter(a => a.disciplinaId === editingDisc.id)} />}
       </Modal>
       <Modal open={modal === "add" || modal === "edit"} onClose={() => { setModal(null); setEditingItem(null); }} title={modal === "edit" ? "Editar Atividade" : (novoTipo === "evento" ? "Novo Evento" : "Nova Avaliação")}>
         <ItemForm item={editingItem} onSave={handleSave} onClose={() => { setModal(null); setEditingItem(null); }} disciplines={disciplines} disciplinasFull={disciplinas} tipoInicial={novoTipo} />
